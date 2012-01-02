@@ -1,1 +1,34 @@
+Name
+    nginx-xsltproc-module - XSLT post processing support in nginx
 
+Synopsis
+
+    config:
+    location / {
+        xsltproc        on;
+        xsltproc_cache  on;
+        xsltproc_types  application/xml;
+        xml_entities    /site/dtd/entities.dtd;
+
+        fastcgi_pass    127.0.0.1:9009;
+        fastcgi_index   index.fcgi;
+        fastcgi_param   SCRIPT_FILENAME  /scripts$fastcgi_script_name;
+        include         fastcgi_params;
+    }
+
+    index.fcgi:
+    use CGI::Fast;
+
+    unless ($ENV{'SERVER_SOFTWARE'}) { # for nginx external fcgi
+        $CGI::Fast::Ext_Request = FCGI::Request(
+            \*STDIN, \*STDOUT, \*STDERR,
+            \%ENV, int($ARGV[0]), 1
+        );
+    }
+
+    while (my $request = new CGI::Fast) {
+        print
+            "X-XSLT: /xslt/test.xslt?param1=1&param2='test'\r\n",
+            "Content-type: application/xml\r\n\r\n",
+            "<root></root>";
+    }
