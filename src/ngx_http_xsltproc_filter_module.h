@@ -13,8 +13,6 @@ typedef struct {
 
 typedef struct {
     ngx_array_t          dtd_files;    /* ngx_http_xsltproc_file_t */
-    ngx_array_t          sheet_files;  /* ngx_http_xsltproc_file_t */
-
     ngx_array_t          sheet_cache;  /* ngx_http_xsltproc_file_t */
     ngx_pool_t          *pool;
 } ngx_http_xsltproc_filter_main_conf_t;
@@ -31,7 +29,6 @@ typedef struct {
     ngx_flag_t           cache_enable;
     
     xmlDtdPtr            dtd;
-    ngx_array_t          sheets;       /* ngx_http_xsltproc_sheet_t */
     ngx_hash_t           types;
     ngx_array_t         *types_keys;
 } ngx_http_xsltproc_filter_loc_conf_t;
@@ -41,7 +38,6 @@ typedef struct {
     xmlDocPtr            doc;
     xmlParserCtxtPtr     ctxt;
     ngx_http_request_t  *request;
-    ngx_array_t          params;
     ngx_array_t          sheets;       /* ngx_http_xsltproc_sheet_t */
 
     ngx_uint_t           done;         /* unsigned  done:1; */
@@ -66,8 +62,6 @@ static void ngx_cdecl ngx_http_xsltproc_sax_error(void *data, const char *msg, .
 static ngx_buf_t * ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     ngx_http_xsltproc_filter_ctx_t *ctx);
 
-static ngx_int_t ngx_http_xsltproc_params(ngx_http_request_t *r, ngx_http_xsltproc_filter_ctx_t *ctx,
-    ngx_array_t *params);
 static u_char * ngx_http_xsltproc_content_type(xsltStylesheetPtr s);
 
 static u_char * ngx_http_xsltproc_encoding(xsltStylesheetPtr s);
@@ -75,8 +69,6 @@ static u_char * ngx_http_xsltproc_encoding(xsltStylesheetPtr s);
 static void ngx_http_xsltproc_cleanup(void *data);
 
 static char * ngx_http_xsltproc_entities(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-
-static char * ngx_http_xsltproc_stylesheet(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
 static void ngx_http_xsltproc_cleanup_dtd(void *data);
 
@@ -114,16 +106,9 @@ static ngx_command_t  ngx_http_xsltproc_filter_commands[] = {
       offsetof(ngx_http_xsltproc_filter_loc_conf_t, cache_enable),
       NULL },
 
-    { ngx_string("xmlproc_entities"),
+    { ngx_string("xml_entities"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_xsltproc_entities,
-      NGX_HTTP_LOC_CONF_OFFSET,
-      0,
-      NULL },
-
-    { ngx_string("xsltproc_stylesheet"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
-      ngx_http_xsltproc_stylesheet,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
       NULL },

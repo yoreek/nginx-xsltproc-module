@@ -1,6 +1,6 @@
 
 /*
- * copyright (c) Yuriy Ustyushenko
+ * Copyright (c) Yuriy Ustyushenko
  * derived from http_xslt_filter (c) Igor Sysoev
  */
 
@@ -190,10 +190,6 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
     h    = part->elts;
 
     for (i = 0; i < part->nelts; i++) {
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-            "PARSE HEADER: \"%V\"",
-            &h[i].value);
-
         if (h[i].key.len == sizeof("x-xslt") -1
             && ngx_strncasecmp(h[i].lowcase_key,
                                 (u_char *) "x-xslt",
@@ -223,17 +219,10 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
                 xslt_r.args.data = xslt_r.args_start;
             }
 
-            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                           "XSLT URI: \"%V\" ARGS: \"%V\"",
-                           &xslt_r.uri, &xslt_r.args);
-
             ngx_http_map_uri_to_path(&xslt_r, &path, &root, 0);
 
             path.len--;
 
-            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                           "XSLT filename: \"%s\"", path.data);
-            
             if (ngx_http_xsltproc_parse_stylesheet(r, ctx, path.data, &stylesheet)
                 != NGX_OK)
             {
@@ -254,6 +243,9 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
             {
                 return NGX_ERROR;
             }
+
+            /* hide header */
+            h[i].hash = 0;
         }
     }
 
@@ -311,8 +303,8 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
 static ngx_int_t
 ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
-    int                          wellFormed;
-    ngx_chain_t                 *cl;
+    int                              wellFormed;
+    ngx_chain_t                     *cl;
     ngx_http_xsltproc_filter_ctx_t  *ctx;
 
     if (in == NULL) {
@@ -560,24 +552,7 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     sheet = ctx->sheets.elts;
     doc   = ctx->doc;
 
-    /* preallocate array for 4 params */
-
-/*
-    if (ngx_array_init(&ctx->params, r->pool, 4 * 2 + 1, sizeof(char *))
-        != NGX_OK)
-    {
-        xmlFreeDoc(doc);
-        return NULL;
-    }
-*/
     for (i = 0; i < ctx->sheets.nelts; i++) {
-/*
-        if (ngx_http_xsltproc_params(r, ctx, &sheet[i].params) != NGX_OK) {
-            xmlFreeDoc(doc);
-            return NULL;
-        }
-        res = xsltApplyStylesheet(sheet[i].stylesheet, doc, ctx->params.elts);
-*/
         res = xsltApplyStylesheet(sheet[i].stylesheet, doc, sheet[i].params.elts);
 
         xmlFreeDoc(doc);
@@ -589,9 +564,6 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
         }
 
         doc = res;
-
-        /* reset array elements */
-/*        ctx->params.nelts = 0;*/
     }
 
     /* there must be at least one stylesheet */
@@ -671,95 +643,6 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     r->headers_out.content_type_lowcase = NULL;
 
     return b;
-}
-
-
-static ngx_int_t
-ngx_http_xsltproc_params(ngx_http_request_t *r, ngx_http_xsltproc_filter_ctx_t *ctx,
-    ngx_array_t *params)
-{
-    u_char                    *p, *last, *value, *dst, *src, **s;
-    size_t                     len;
-    ngx_uint_t                 i;
-    ngx_str_t                  string;
-    ngx_http_complex_value_t  *param;
-
-    param = params->elts;
-
-    for (i = 0; i < params->nelts; i++) {
-
-        if (ngx_http_complex_value(r, &param[i], &string) != NGX_OK) {
-            return NGX_ERROR;
-        }
-
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                       "xslt filter param: \"%s\"", string.data);
-
-        p = string.data;
-        last = string.data + string.len - 1;
-
-        while (p && *p) {
-
-            value = p;
-            p = (u_char *) ngx_strchr(p, '=');
-            if (p == NULL) {
-                ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                                "invalid libxslt parameter \"%s\"", value);
-                return NGX_ERROR;
-            }
-            *p++ = '\0';
-
-            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                           "xslt filter param name: \"%s\"", value);
-
-            s = ngx_array_push(&ctx->params);
-            if (s == NULL) {
-                return NGX_ERROR;
-            }
-
-            *s = value;
-
-            value = p;
-            p = (u_char *) ngx_strchr(p, ':');
-
-            if (p) {
-                len = p - value;
-                *p++ = '\0';
-
-            } else {
-                len = last - value;
-            }
-
-            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                           "xslt filter param value: \"%s\"", value);
-
-            dst = value;
-            src = value;
-
-            ngx_unescape_uri(&dst, &src, len, 0);
-
-            *dst = '\0';
-
-            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                           "xslt filter param unescaped: \"%s\"", value);
-
-            s = ngx_array_push(&ctx->params);
-            if (s == NULL) {
-                return NGX_ERROR;
-            }
-
-            *s = value;
-        }
-    }
-
-    s = ngx_array_push(&ctx->params);
-    if (s == NULL) {
-        return NGX_ERROR;
-    }
-
-    *s = NULL;
-
-    return NGX_OK;
 }
 
 
@@ -868,115 +751,6 @@ ngx_http_xsltproc_entities(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 }
 
 
-
-static char *
-ngx_http_xsltproc_stylesheet(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
-{
-    ngx_http_xsltproc_filter_loc_conf_t *xlcf = conf;
-
-    ngx_str_t                         *value;
-    ngx_uint_t                         i, n;
-    ngx_pool_cleanup_t                *cln;
-    ngx_http_xsltproc_file_t              *file;
-    ngx_http_xsltproc_sheet_t             *sheet;
-    ngx_http_complex_value_t          *param;
-    ngx_http_compile_complex_value_t   ccv;
-    ngx_http_xsltproc_filter_main_conf_t  *xmcf;
-
-    value = cf->args->elts;
-
-    if (xlcf->sheets.elts == NULL) {
-        if (ngx_array_init(&xlcf->sheets, cf->pool, 1,
-                           sizeof(ngx_http_xsltproc_sheet_t))
-            != NGX_OK)
-        {
-            return NGX_CONF_ERROR;
-        }
-    }
-
-    sheet = ngx_array_push(&xlcf->sheets);
-    if (sheet == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    ngx_memzero(sheet, sizeof(ngx_http_xsltproc_sheet_t));
-
-    if (ngx_conf_full_name(cf->cycle, &value[1], 0) != NGX_OK) {
-        return NGX_CONF_ERROR;
-    }
-
-    xmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_xsltproc_filter_module);
-
-    file = xmcf->sheet_files.elts;
-    for (i = 0; i < xmcf->sheet_files.nelts; i++) {
-        if (ngx_strcmp(file[i].name, &value[1].data) == 0) {
-            sheet->stylesheet = file[i].data;
-            goto found;
-        }
-    }
-
-    cln = ngx_pool_cleanup_add(cf->pool, 0);
-    if (cln == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    sheet->stylesheet = xsltParseStylesheetFile(value[1].data);
-    if (sheet->stylesheet == NULL) {
-        ngx_conf_log_error(NGX_LOG_ERR, cf, 0,
-                           "xsltParseStylesheetFile(\"%s\") failed",
-                           value[1].data);
-        return NGX_CONF_ERROR;
-    }
-
-    cln->handler = ngx_http_xsltproc_cleanup_stylesheet;
-    cln->data = sheet->stylesheet;
-
-    file = ngx_array_push(&xmcf->sheet_files);
-    if (file == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    file->name = value[1].data;
-    file->data = sheet->stylesheet;
-
-found:
-
-    n = cf->args->nelts;
-
-    if (n == 2) {
-        return NGX_CONF_OK;
-    }
-
-    if (ngx_array_init(&sheet->params, cf->pool, n - 2,
-                       sizeof(ngx_http_complex_value_t))
-        != NGX_OK)
-    {
-        return NGX_CONF_ERROR;
-    }
-
-    for (i = 2; i < n; i++) {
-
-        param = ngx_array_push(&sheet->params);
-        if (param == NULL) {
-            return NGX_CONF_ERROR;
-        }
-
-        ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
-
-        ccv.cf = cf;
-        ccv.value = &value[i];
-        ccv.complex_value = param;
-        ccv.zero = 1;
-
-        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
-            return NGX_CONF_ERROR;
-        }
-    }
-
-    return NGX_CONF_OK;
-}
-
-
 static void
 ngx_http_xsltproc_cleanup_dtd(void *data)
 {
@@ -1009,14 +783,6 @@ ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf)
         return NULL;
     }
 
-    if (ngx_array_init(&conf->sheet_files, cf->pool, 32,
-                       sizeof(ngx_http_xsltproc_file_t))
-        != NGX_OK)
-    {
-        return NULL;
-    }
-
-
     if (ngx_array_init(&conf->sheet_cache, cf->pool, 32,
                        sizeof(ngx_http_xsltproc_file_t))
         != NGX_OK)
@@ -1045,7 +811,6 @@ ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf)
      * set by ngx_pcalloc():
      *
      *     conf->dtd = NULL;
-     *     conf->sheets = { NULL };
      *     conf->types = { NULL };
      *     conf->types_keys = NULL;
      */
@@ -1065,10 +830,6 @@ ngx_http_xsltproc_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child)
 
     if (conf->dtd == NULL) {
         conf->dtd = prev->dtd;
-    }
-
-    if (conf->sheets.nelts == 0) {
-        conf->sheets = prev->sheets;
     }
 
     if (ngx_http_merge_types(cf, &conf->types_keys, &conf->types,

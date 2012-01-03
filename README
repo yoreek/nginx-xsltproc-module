@@ -1,34 +1,141 @@
 Name
-    nginx-xsltproc-module - XSLT post processing support in nginx
+    nginx-xsltproc-module - an extended version of the standard module
+    HttpXsltModule that allows you to specify a stylesheet in fastcgi
+    script by passing a specified header.
 
 Synopsis
+    #nginx.conf
+        location / {
+            xsltproc        on;
+            xsltproc_cache  on;
+            xsltproc_types  application/xml;
+            xml_entities    /site/dtd/entities.dtd;
 
-    config:
-    location / {
-        xsltproc        on;
-        xsltproc_cache  on;
-        xsltproc_types  application/xml;
-        xml_entities    /site/dtd/entities.dtd;
+            fastcgi_pass    127.0.0.1:9009;
+            fastcgi_index   index.fcgi;
+            fastcgi_param   SCRIPT_FILENAME  /scripts$fastcgi_script_name;
+            include         fastcgi_params;
+        }
 
-        fastcgi_pass    127.0.0.1:9009;
-        fastcgi_index   index.fcgi;
-        fastcgi_param   SCRIPT_FILENAME  /scripts$fastcgi_script_name;
-        include         fastcgi_params;
-    }
+    #index.fcgi
+        #!/usr/bin/perl
 
-    index.fcgi:
-    use CGI::Fast;
+        use strict;
+        use warnings;
 
-    unless ($ENV{'SERVER_SOFTWARE'}) { # for nginx external fcgi
-        $CGI::Fast::Ext_Request = FCGI::Request(
-            \*STDIN, \*STDOUT, \*STDERR,
-            \%ENV, int($ARGV[0]), 1
-        );
-    }
+        use CGI::Fast;
 
-    while (my $request = new CGI::Fast) {
-        print
-            "X-XSLT: /xslt/test.xslt?param1=1&param2='test'\r\n",
-            "Content-type: application/xml\r\n\r\n",
-            "<root></root>";
-    }
+        my $socket  = FCGI::OpenSocket("127.0.0.1:9009", 256);
+        my $request = FCGI::Request(\*STDIN, \*STDOUT, \*STDERR, \%ENV, $socket);
+
+        while ($request->Accept() >= 0) {
+
+            print
+                "X-Xslt: /xslt/test.xslt?param1=1&param2='test'\r\n",
+                "Content-type: application/xml\r\n\r\n",
+                "<root></root>";
+        }
+
+Description
+    This module extends the standard module HttpXsltModule to specify
+    a stylesheet in fastcgi script by passing a specified header.
+
+    Header must be specified as:
+    X-Xslt: <stylesheet_path>[?<param>=<value>[&<param>=<value>...]]
+
+    Stylesheet path is root-relative.
+    
+    Parameter values must be escaped with the URI escaping mechanism.
+
+Directives
+    xsltproc
+        syntax: *xsltproc on|off*
+
+        default: *xsltproc off*
+
+        context: *http, server, location*
+
+        Turning this directive on will enable XSLT processing.
+
+    xsltproc_cache
+        syntax: *xsltproc_cache on|off*
+
+        default: *xsltproc_cache off*
+
+        context: *http, server, location*
+
+        Turning this directive on will enable stylesheet caching.
+
+    xml_entities
+        syntax: *xml_entities <path>*
+
+        default: *no*
+
+        context: *http, server, location*
+
+        Specifies the DTD file which describes symbolic elements (xml entities).
+        This file is compiled at the stage of configuration. For technical
+        reasons it's not possible to specify entities in the XML being processed,
+        therefore they are ignored, but this specially assigned file is used
+        instead. In this file it is not necessary to describe structure of
+        processed XML, it is sufficient only to declare necessary symbolic
+        elements, for example:
+            <! ENTITY of nbsp "  ">
+
+    xsltproc_types
+        syntax: *xsltproc_types mime-type [mime-type...]*
+
+        default: *xsltproc_types text/xml*
+
+        context: *http, server, location*
+
+        Permit processing responses with specified MIME-types in addition to "text/xml".
+        If XSLT output mode is HTML, then the response MIME-type changes to "text/HTML".
+
+Installation
+    Grab the nginx source code from nginx.org (<http://nginx.org/>), for
+    example, the version 1.0.11, and then build the source with this module:
+
+        wget 'http://nginx.org/download/nginx-1.0.11.tar.gz'
+        tar -xzvf nginx-1.0.11.tar.gz
+        cd nginx-1.0.11/
+
+        ./configure --add-module=/path/to/nginx-xsltproc-module
+
+        make -j2
+        make install
+
+    Download the latest version of the release tarball of this module from
+    nginx-xsltproc-module file list
+    (<https://github.com/yoreek/nginx-xsltproc-module/tags>).
+
+Copyright & License
+    This module is based on the HttpXsltModule module in the Nginx 1.0.11 sources.
+    The original code is copyright Igor Sysoev.
+
+    Copyright (c) 2012, Yuriy Ustyushenko <yoreel@yahoo.com>.
+
+    This module is licensed under the terms of the BSD license.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+    *   Redistributions of source code must retain the above copyright
+        notice, this list of conditions and the following disclaimer.
+
+    *   Redistributions in binary form must reproduce the above copyright
+        notice, this list of conditions and the following disclaimer in the
+        documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+    IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+    TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+    PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+    TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
