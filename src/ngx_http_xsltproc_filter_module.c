@@ -191,7 +191,7 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
 
     for (i = 0; i < part->nelts; i++) {
         if (h[i].key.len == sizeof("x-xslt") -1
-            && ngx_strncasecmp(h[i].lowcase_key,
+            && ngx_strncasecmp(h[i].key.data,
                                 (u_char *) "x-xslt",
                                 sizeof("x-xslt") - 1)
             == 0)
