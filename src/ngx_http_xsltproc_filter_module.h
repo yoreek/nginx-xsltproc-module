@@ -5,6 +5,13 @@
 #define NGX_HTTP_XSLTPROC_REUSE_DTD  1
 #endif
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
+#include "ngx_http_xsltproc_core.h"
+#include "ngx_http_xsltproc_xslt.h"
+
 typedef struct {
     u_char              *name;
     void                *data;
@@ -20,18 +27,9 @@ typedef struct {
 
 typedef struct {
     xsltStylesheetPtr    stylesheet;
+    ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet;
     ngx_array_t          params;       /* ngx_http_complex_value_t */
 } ngx_http_xsltproc_sheet_t;
-
-
-typedef struct {
-    ngx_flag_t           enable;
-    ngx_flag_t           cache_enable;
-    
-    xmlDtdPtr            dtd;
-    ngx_hash_t           types;
-    ngx_array_t         *types_keys;
-} ngx_http_xsltproc_filter_loc_conf_t;
 
 
 typedef struct {
@@ -46,7 +44,7 @@ typedef struct {
 
 static ngx_int_t ngx_http_xsltproc_parse_stylesheet(ngx_http_request_t *r,
     ngx_http_xsltproc_filter_ctx_t *ctx, u_char *name,
-    xsltStylesheetPtr *stylesheet);
+    ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet);
 static ngx_int_t ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params);
 static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_ctx_t *ctx);
 static ngx_int_t ngx_http_xsltproc_header_filter(ngx_http_request_t *r);
@@ -72,12 +70,11 @@ static char * ngx_http_xsltproc_entities(ngx_conf_t *cf, ngx_command_t *cmd, voi
 
 static void ngx_http_xsltproc_cleanup_dtd(void *data);
 
-static void ngx_http_xsltproc_cleanup_stylesheet(void *data);
-
 static void * ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf);
 static void * ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf);
 static char * ngx_http_xsltproc_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child);
 static ngx_int_t ngx_http_xsltproc_filter_init(ngx_conf_t *cf);
+static ngx_int_t ngx_http_xsltproc_filter_init_process(ngx_cycle_t *cycle);
 static void ngx_http_xsltproc_filter_exit(ngx_cycle_t *cycle);
 
 static u_char ngx_http_xsltproc_empty_xpath_expression[] = "''\0";
@@ -98,12 +95,20 @@ static ngx_command_t  ngx_http_xsltproc_filter_commands[] = {
       offsetof(ngx_http_xsltproc_filter_loc_conf_t, enable),
       NULL },
 
-    { ngx_string("xsltproc_cache"),
+    { ngx_string("xsltproc_stylesheet_caching"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
                         |NGX_CONF_FLAG,
       ngx_conf_set_flag_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
-      offsetof(ngx_http_xsltproc_filter_loc_conf_t, cache_enable),
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, stylesheet_caching),
+      NULL },
+
+    { ngx_string("xsltproc_stylesheet_check_if_modify"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, stylesheet_check_if_modify),
       NULL },
 
     { ngx_string("xml_entities"),
@@ -146,11 +151,11 @@ ngx_module_t ngx_http_xsltproc_filter_module = {
     NGX_HTTP_MODULE,                       /* module type */
     NULL,                                  /* init master */
     NULL,                                  /* init module */
-    NULL,                                  /* init process */
+    ngx_http_xsltproc_filter_init_process, /* init process */
     NULL,                                  /* init thread */
     NULL,                                  /* exit thread */
     ngx_http_xsltproc_filter_exit,         /* exit process */
-    ngx_http_xsltproc_filter_exit,         /* exit master */
+    NULL,                                  /* exit master */
     NGX_MODULE_V1_PADDING
 };
 

@@ -160,6 +160,22 @@ ngx_addon_name=ngx_http_xsltproc_filter_module
 
 HTTP_FILTER_MODULES="$HTTP_FILTER_MODULES ngx_http_xsltproc_filter_module"
 
-NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/src/ngx_http_xsltproc_filter_module.c"
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS \
+    $ngx_addon_dir/src/ngx_http_xsltproc_filter_module.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_core.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_list.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_xslt.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_xslt_document.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_xslt_document_cache.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_xslt_keys.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_xslt_keys_cache.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_xslt_stylesheet.c \
+    $ngx_addon_dir/src/ngx_http_xsltproc_xslt_stylesheet_cache.c \
+"
 
-NGX_ADDON_DEPS="$NGX_ADDON_DEPS $ngx_addon_dir/src/ngx_http_xsltproc_filter_module.h"
+NGX_ADDON_DEPS="$NGX_ADDON_DEPS \
+    $ngx_addon_dir/src/ngx_http_xsltproc_filter_module.h \
+    $ngx_addon_dir/src/ngx_http_xsltproc_core.h \
+    $ngx_addon_dir/src/ngx_http_xsltproc_list.h \
+    $ngx_addon_dir/src/ngx_http_xsltproc_xslt.h \
+"

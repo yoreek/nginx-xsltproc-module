@@ -4,19 +4,6 @@
  * derived from http_xslt_filter (c) Igor Sysoev
  */
 
-
-#include <ngx_config.h>
-#include <ngx_core.h>
-#include <ngx_http.h>
-
-#include <libxml/parser.h>
-#include <libxml/tree.h>
-#include <libxslt/xslt.h>
-#include <libxslt/xsltInternals.h>
-#include <libxslt/transform.h>
-#include <libxslt/xsltutils.h>
-#include <libexslt/exslt.h>
-
 #include "ngx_http_xsltproc_filter_module.h"
 
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
@@ -26,63 +13,19 @@ static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 static ngx_int_t
 ngx_http_xsltproc_parse_stylesheet(ngx_http_request_t *r,
     ngx_http_xsltproc_filter_ctx_t *ctx, u_char *name,
-    xsltStylesheetPtr *stylesheet)
+    ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet)
 {
-    ngx_http_xsltproc_filter_main_conf_t  *xmcf;
     ngx_http_xsltproc_filter_loc_conf_t   *xlcf;
-    ngx_http_xsltproc_file_t              *file;
-    ngx_uint_t                             i;
-    ngx_pool_cleanup_t                    *cln;
 
     xlcf = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
-    xmcf = ngx_http_get_module_main_conf(r, ngx_http_xsltproc_filter_module);
 
-    if (xlcf->cache_enable == 1) {
-        cln = ngx_pool_cleanup_add(xmcf->pool, 0);
-        if (cln == NULL) {
-            return NGX_ERROR;
-        }
+    *xslt_stylesheet = ngx_http_xsltproc_xslt_stylesheet_parse_file(xlcf, (char *) name);
 
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                       "lookup for the stylesheet \"%s\" in cache",
-                       name);
-
-        file = xmcf->sheet_cache.elts;
-        for (i = 0; i < xmcf->sheet_cache.nelts; i++) {
-            if (ngx_strcmp(file[i].name, name) == 0) {
-                *stylesheet = file[i].data;
-                ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                               "stylesheet \"%s\" found in cache",
-                               name);
-
-                return NGX_OK;
-            }
-        }
-    }
-
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "parse stylesheet \"%s\"",
-                   name);
-
-    *stylesheet = xsltParseStylesheetFile(name);
-    if (*stylesheet == NULL) {
+    if (*xslt_stylesheet == NULL) {
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
             "xsltParseStylesheetFile(\"%s\") failed",
             name);
         return NGX_ERROR;
-    }
-
-    if (xlcf->cache_enable == 1) {
-        cln->handler = ngx_http_xsltproc_cleanup_stylesheet;
-        cln->data    = *stylesheet;
-
-        file = ngx_array_push(&xmcf->sheet_cache);
-        if (file == NULL) {
-            return NGX_ERROR;
-        }
-
-        file->name = name;
-        file->data = *stylesheet;
     }
 
     return NGX_OK;
@@ -112,7 +55,7 @@ ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params)
 
     for ( /* void */ ; p <= last; p++) {
         ch = *p;
-        
+
         if (step == 1 && (p == last || ch == '=' || ch == '&')) {
             if (p <= value)
                 continue;
@@ -180,7 +123,7 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
     ngx_table_elt_t           *h;
     ngx_str_t                  path;
     ngx_http_request_t         xslt_r;
-    xsltStylesheetPtr          stylesheet;
+    ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet;
     ngx_http_xsltproc_sheet_t *sheet;
 
     memcpy(&xslt_r, r, sizeof(xslt_r));
@@ -207,9 +150,9 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
 
             xslt_r.uri_start = xslt_r.uri.data;
             xslt_r.uri_end   = xslt_r.uri.data + xslt_r.uri.len;
-            
+
             ngx_str_null(&xslt_r.args);
-            
+
             if (ngx_http_parse_complex_uri(&xslt_r, 0) != NGX_OK) {
                 return NGX_ERROR;
             }
@@ -223,7 +166,7 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
 
             path.len--;
 
-            if (ngx_http_xsltproc_parse_stylesheet(r, ctx, path.data, &stylesheet)
+            if (ngx_http_xsltproc_parse_stylesheet(r, ctx, path.data, &xslt_stylesheet)
                 != NGX_OK)
             {
                 return NGX_ERROR;
@@ -236,7 +179,7 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
 
             ngx_memzero(sheet, sizeof(ngx_http_xsltproc_sheet_t));
 
-            sheet->stylesheet = stylesheet;
+            sheet->xslt_stylesheet = xslt_stylesheet;
 
             if (ngx_http_xsltproc_parse_params(&xslt_r, &sheet->params)
                 != NGX_OK)
@@ -547,13 +490,16 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     xmlDocPtr                             doc, res;
     ngx_http_xsltproc_sheet_t            *sheet;
     ngx_http_xsltproc_filter_loc_conf_t  *conf;
+    ngx_http_xsltproc_xslt_stylesheet_t  *xslt_stylesheet;
 
     conf  = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
     sheet = ctx->sheets.elts;
     doc   = ctx->doc;
 
     for (i = 0; i < ctx->sheets.nelts; i++) {
-        res = xsltApplyStylesheet(sheet[i].stylesheet, doc, sheet[i].params.elts);
+        xslt_stylesheet = sheet[i].xslt_stylesheet;
+
+        res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc, sheet[i].params.elts);
 
         xmlFreeDoc(doc);
 
@@ -569,13 +515,13 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     /* there must be at least one stylesheet */
 
     if (r == r->main) {
-        type = ngx_http_xsltproc_content_type(sheet[i - 1].stylesheet);
+        type = ngx_http_xsltproc_content_type(xslt_stylesheet->stylesheet);
 
     } else {
         type = NULL;
     }
 
-    encoding = ngx_http_xsltproc_encoding(sheet[i - 1].stylesheet);
+    encoding = ngx_http_xsltproc_encoding(xslt_stylesheet->stylesheet);
     doc_type = doc->type;
 
     ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
@@ -583,16 +529,15 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
                    doc_type, type ? type : (u_char *) "(null)",
                    encoding ? encoding : (u_char *) "(null)");
 
-    rc = xsltSaveResultToString(&buf, &len, doc, sheet[i - 1].stylesheet);
+    rc = xsltSaveResultToString(&buf, &len, doc, xslt_stylesheet->stylesheet);
 
     xmlFreeDoc(doc);
 
-    if (conf->cache_enable == 0) {
+    if (conf->stylesheet_caching == 0) {
         for (i = 0; i < ctx->sheets.nelts; i++) {
-            ngx_http_xsltproc_cleanup_stylesheet(sheet[i].stylesheet);
+            ngx_http_xsltproc_xslt_stylesheet_free(xslt_stylesheet);
         }
     }
-
 
     if (rc != 0) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
@@ -758,13 +703,6 @@ ngx_http_xsltproc_cleanup_dtd(void *data)
 }
 
 
-static void
-ngx_http_xsltproc_cleanup_stylesheet(void *data)
-{
-    xsltFreeStylesheet(data);
-}
-
-
 static void *
 ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf)
 {
@@ -815,9 +753,12 @@ ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf)
      *     conf->types_keys = NULL;
      */
 
-    conf->enable       = NGX_CONF_UNSET;
-    conf->cache_enable = NGX_CONF_UNSET;
-    
+    conf->enable                     = NGX_CONF_UNSET;
+    conf->stylesheet_caching         = NGX_CONF_UNSET;
+    conf->stylesheet_check_if_modify = NGX_CONF_UNSET;
+    conf->document_caching           = NGX_CONF_UNSET;
+    conf->keys_caching               = NGX_CONF_UNSET;
+
     return conf;
 }
 
@@ -857,9 +798,27 @@ ngx_http_xsltproc_filter_init(ngx_conf_t *cf)
 }
 
 
+static ngx_int_t
+ngx_http_xsltproc_filter_init_process(ngx_cycle_t *cycle)
+{
+    ngx_http_xsltproc_xslt_init(cycle->log);
+
+#ifdef NGX_DEBUG
+    ngx_log_error_core(NGX_LOG_DEBUG, cycle->log, 0, "xsltproc filter init");
+#endif
+
+    return NGX_OK;
+}
+
+
 static void
 ngx_http_xsltproc_filter_exit(ngx_cycle_t *cycle)
 {
-    xsltCleanupGlobals();
+#ifdef NGX_DEBUG
+    ngx_log_error_core(NGX_LOG_DEBUG, cycle->log, 0, "xsltproc filter exit");
+#endif
+
+    ngx_http_xsltproc_xslt_cleanup();
+
     xmlCleanupParser();
 }

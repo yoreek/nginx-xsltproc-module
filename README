@@ -7,7 +7,8 @@ Synopsis
     #nginx.conf
         location / {
             xsltproc        on;
-            xsltproc_cache  on;
+            xsltproc_stylesheet_caching on;
+            xsltproc_stylesheet_check_if_modify on;
             xsltproc_types  application/xml;
             xml_entities    /site/dtd/entities.dtd;
 
@@ -44,7 +45,7 @@ Description
     X-Xslt: <stylesheet_path>[?<param>=<value>[&<param>=<value>...]]
 
     Stylesheet path is root-relative.
-    
+
     Parameter values must be escaped with the URI escaping mechanism.
 
 Directives
@@ -57,14 +58,24 @@ Directives
 
         Turning this directive on will enable XSLT processing.
 
-    xsltproc_cache
-        syntax: *xsltproc_cache on|off*
+    xsltproc_stylesheet_caching
+        syntax: *xsltproc_stylesheet_caching on|off*
 
-        default: *xsltproc_cache off*
+        default: *xsltproc_stylesheet_caching off*
 
         context: *http, server, location*
 
         Turning this directive on will enable stylesheet caching.
+
+    xsltproc_stylesheet_check_if_modify
+        syntax: *xsltproc_stylesheet_check_if_modify on|off*
+
+        default: *xsltproc_stylesheet_check_if_modify off*
+
+        context: *http, server, location*
+
+        Turning this directive on will check if a stylesheet has been modified
+        on every request and will update cache if need.
 
     xml_entities
         syntax: *xml_entities <path>*
