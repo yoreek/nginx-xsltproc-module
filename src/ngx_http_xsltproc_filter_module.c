@@ -12,8 +12,7 @@ static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 
 static ngx_int_t
 ngx_http_xsltproc_parse_stylesheet(ngx_http_request_t *r,
-    ngx_http_xsltproc_filter_ctx_t *ctx, u_char *name,
-    ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet)
+    u_char *name, ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet)
 {
     ngx_http_xsltproc_filter_loc_conf_t   *xlcf;
 
@@ -115,7 +114,7 @@ ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params)
 
 
 static ngx_int_t
-ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_ctx_t *ctx)
+ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_array_t *sheets)
 {
     size_t                     root;
     ngx_uint_t                 i, flags;
@@ -166,13 +165,13 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_c
 
             path.len--;
 
-            if (ngx_http_xsltproc_parse_stylesheet(r, ctx, path.data, &xslt_stylesheet)
+            if (ngx_http_xsltproc_parse_stylesheet(r, path.data, &xslt_stylesheet)
                 != NGX_OK)
             {
                 return NGX_ERROR;
             }
 
-            sheet = ngx_array_push(&ctx->sheets);
+            sheet = ngx_array_push(sheets);
             if (sheet == NULL) {
                 return NGX_ERROR;
             }
@@ -201,6 +200,7 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
 {
     ngx_http_xsltproc_filter_ctx_t       *ctx;
     ngx_http_xsltproc_filter_loc_conf_t  *conf;
+    ngx_array_t                          *sheets;
 
     if (r->headers_out.status == NGX_HTTP_NOT_MODIFIED) {
         return ngx_http_next_header_filter(r);
@@ -208,34 +208,51 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
 
+    /* next filter if this filter or content type not such as required */
     if (conf->enable == 0 || ngx_http_test_content_type(r, &conf->types) == NULL)
     {
         return ngx_http_next_header_filter(r);
     }
 
-    ctx = ngx_http_get_module_ctx(r, ngx_http_xsltproc_filter_module);
-
-    if (ctx) {
-        return ngx_http_next_header_filter(r);
-    }
-
-    ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_xsltproc_filter_ctx_t));
-    if (ctx == NULL) {
+    /* init sheets list */
+    sheets = ngx_pcalloc(r->pool, sizeof(ngx_array_t));
+    if (sheets == NULL) {
         return NGX_ERROR;
     }
-
-    if (ngx_array_init(&ctx->sheets, r->pool, 32,
+    if (ngx_array_init(sheets, r->pool, 32,
                        sizeof(ngx_http_xsltproc_sheet_t))
         != NGX_OK)
     {
         return NGX_ERROR;
     }
 
-    ngx_http_set_ctx(r, ctx, ngx_http_xsltproc_filter_module);
-
-    if (ngx_http_xsltproc_parse_header(r, ctx) != NGX_OK) {
+    /* parse header */
+    if (ngx_http_xsltproc_parse_header(r, sheets) != NGX_OK) {
         return NGX_ERROR;
     }
+
+    /* next filter if not spicified any stylesheet */
+    if (sheets->nelts == 0) {
+        return ngx_http_next_header_filter(r);
+    }
+
+    /* get context */
+    ctx = ngx_http_get_module_ctx(r, ngx_http_xsltproc_filter_module);
+
+    /* next filter if context already created */
+    if (ctx) {
+        return ngx_http_next_header_filter(r);
+    }
+
+    /* create context */
+    ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_xsltproc_filter_ctx_t));
+    if (ctx == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_http_set_ctx(r, ctx, ngx_http_xsltproc_filter_module);
+
+    ctx->sheets = sheets;
 
     r->main_filter_need_in_memory = 1;
 
@@ -256,7 +273,7 @@ ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_xsltproc_filter_module);
 
-    if (ctx == NULL || ctx->done) {
+    if (ctx == NULL || ctx->sheets->nelts == 0 || ctx->done) {
         return ngx_http_next_body_filter(r, in);
     }
 
@@ -493,10 +510,10 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     ngx_http_xsltproc_xslt_stylesheet_t  *xslt_stylesheet;
 
     conf  = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
-    sheet = ctx->sheets.elts;
+    sheet = ctx->sheets->elts;
     doc   = ctx->doc;
 
-    for (i = 0; i < ctx->sheets.nelts; i++) {
+    for (i = 0; i < ctx->sheets->nelts; i++) {
         xslt_stylesheet = sheet[i].xslt_stylesheet;
 
         res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc, sheet[i].params.elts);
@@ -534,7 +551,7 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     xmlFreeDoc(doc);
 
     if (conf->stylesheet_caching == 0) {
-        for (i = 0; i < ctx->sheets.nelts; i++) {
+        for (i = 0; i < ctx->sheets->nelts; i++) {
             ngx_http_xsltproc_xslt_stylesheet_free(xslt_stylesheet);
         }
     }

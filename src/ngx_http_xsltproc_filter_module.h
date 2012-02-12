@@ -36,17 +36,16 @@ typedef struct {
     xmlDocPtr            doc;
     xmlParserCtxtPtr     ctxt;
     ngx_http_request_t  *request;
-    ngx_array_t          sheets;       /* ngx_http_xsltproc_sheet_t */
+    ngx_array_t         *sheets;       /* ngx_http_xsltproc_sheet_t */
 
     ngx_uint_t           done;         /* unsigned  done:1; */
 } ngx_http_xsltproc_filter_ctx_t;
 
 
 static ngx_int_t ngx_http_xsltproc_parse_stylesheet(ngx_http_request_t *r,
-    ngx_http_xsltproc_filter_ctx_t *ctx, u_char *name,
-    ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet);
+    u_char *name, ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet);
 static ngx_int_t ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params);
-static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_http_xsltproc_filter_ctx_t *ctx);
+static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_array_t *sheets);
 static ngx_int_t ngx_http_xsltproc_header_filter(ngx_http_request_t *r);
 
 static ngx_int_t ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in);
