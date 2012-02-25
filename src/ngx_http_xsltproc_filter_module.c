@@ -132,10 +132,10 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_array_t *sheets)
     h    = part->elts;
 
     for (i = 0; i < part->nelts; i++) {
-        if (h[i].key.len == sizeof("x-xslt") -1
+        if (h[i].key.len == sizeof("x-xslt-stylesheet") -1
             && ngx_strncasecmp(h[i].key.data,
-                                (u_char *) "x-xslt",
-                                sizeof("x-xslt") - 1)
+                                (u_char *) "x-xslt-stylesheet",
+                                sizeof("x-xslt-stylesheet") - 1)
             == 0)
         {
             xslt_r.uri.len   = h[i].value.len;
@@ -500,11 +500,13 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     ngx_http_xsltproc_filter_ctx_t *ctx)
 {
     int                                   len, rc, doc_type;
-    u_char                               *type, *encoding;
+    ngx_str_t                            *type, *encoding;
     ngx_buf_t                            *b;
     ngx_uint_t                            i;
     xmlChar                              *buf;
-    xmlDocPtr                             doc, res;
+    xmlDocPtr                             doc, res, profile_info, summary_profile_info;
+    xmlNodePtr                            root, child, child2, child3;
+    const char                          **p;
     ngx_http_xsltproc_sheet_t            *sheet;
     ngx_http_xsltproc_filter_loc_conf_t  *conf;
     ngx_http_xsltproc_xslt_stylesheet_t  *xslt_stylesheet;
@@ -513,10 +515,80 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     sheet = ctx->sheets->elts;
     doc   = ctx->doc;
 
+    if (conf->profiler) {
+        /*
+         * <profiler>
+         *   <stylesheet uri="main.xsl">
+         *     <profile>
+         *       <template name="" match="*" mode="" ... />
+         *       ...
+         *     </profile>
+         *     <document>
+         *       <root>
+         *         ...
+         *       </root>
+         *     </document>
+         *     <params>
+         *       <param name="name1" value="'value1'" />
+         *       ...
+         *     </params>
+         *   </stylesheet>
+         *   ...
+         * </profiler>
+         */
+
+        summary_profile_info = xmlNewDoc((const xmlChar*) "1.0");
+        summary_profile_info->encoding = (const xmlChar*) xmlStrdup((const xmlChar*) "utf-8");
+
+        root = xmlNewDocNode(summary_profile_info, NULL, BAD_CAST "profiler", NULL);
+        xmlDocSetRootElement(summary_profile_info, root);
+    }
+
     for (i = 0; i < ctx->sheets->nelts; i++) {
         xslt_stylesheet = sheet[i].xslt_stylesheet;
 
-        res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc, sheet[i].params.elts);
+        if (conf->profiler) {
+            profile_info = NULL;
+
+            res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc, sheet[i].params.elts, &profile_info);
+
+            if (res && profile_info) {
+                /* add stylesheet info */
+                child = xmlNewChild(root, NULL, BAD_CAST "stylesheet", NULL);
+                xmlSetProp(child, BAD_CAST "uri", BAD_CAST xslt_stylesheet->uri);
+
+                /* add profile info */
+                xmlAddChild(child, xmlDocCopyNode(xmlDocGetRootElement(profile_info), summary_profile_info, 1));
+
+                /* add document */
+                child2 = xmlNewChild(child, NULL, BAD_CAST "document", NULL);
+                xmlAddChild(child2, xmlDocCopyNode(xmlDocGetRootElement(doc), summary_profile_info, 1));
+
+                /* add params */
+                child2 = xmlNewChild(child, NULL, BAD_CAST "params", NULL);
+                p = sheet[i].params.elts;
+                for(; *p != '\0'; p++) {
+                    child3 = xmlNewChild(child2, NULL, BAD_CAST "param", NULL);
+
+                    xmlSetProp(child3, BAD_CAST "name", BAD_CAST *p);
+                    p++;
+                    xmlSetProp(child3, BAD_CAST "value", BAD_CAST *p);
+                }
+
+                xmlFreeDoc(profile_info);
+            }
+            else {
+                xmlFreeDoc(doc);
+                if (res) xmlFreeDoc(res);
+
+                ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                              "ngx_http_xsltproc_apply_stylesheet: no profile info");
+                return NULL;
+            }
+        }
+        else {
+            res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc, sheet[i].params.elts, NULL);
+        }
 
         xmlFreeDoc(doc);
 
@@ -529,22 +601,59 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
         doc = res;
     }
 
-    /* there must be at least one stylesheet */
+    if (conf->profiler) {
+        res = xsltApplyStylesheet(conf->profiler, summary_profile_info, NULL);
 
-    if (r == r->main) {
-        type = ngx_http_xsltproc_content_type(xslt_stylesheet->stylesheet);
+        if (res) {
+            root = xmlDocCopyNode(xmlDocGetRootElement(res), doc, 1);
 
-    } else {
-        type = NULL;
+            if (root) {
+                xmlAddChild(xmlDocGetRootElement(doc)->last, root);
+            }
+            else {
+                ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                               "ngx_http_xsltproc_apply_stylesheet: no root in profile info");
+            }
+
+            xmlFreeDoc(res);
+        }
+        else {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                           "ngx_http_xsltproc_apply_stylesheet: no profile info");
+        }
+
+        xmlFreeDoc(summary_profile_info);
     }
 
-    encoding = ngx_http_xsltproc_encoding(xslt_stylesheet->stylesheet);
-    doc_type = doc->type;
+    /* there must be at least one stylesheet */
 
-    ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                   "xslt filter type: %d t:%s e:%s",
-                   doc_type, type ? type : (u_char *) "(null)",
-                   encoding ? encoding : (u_char *) "(null)");
+    encoding = ngx_palloc(r->pool, sizeof(ngx_str_t));
+    if (encoding == NULL) {
+        return NULL;
+    }
+    ngx_memzero(encoding, sizeof(ngx_str_t));
+
+    type = ngx_palloc(r->pool, sizeof(ngx_str_t));
+    if (type == NULL) {
+        return NULL;
+    }
+    ngx_memzero(type, sizeof(ngx_str_t));
+
+    if (r == r->main) {
+        type->data = ngx_http_xsltproc_content_type(xslt_stylesheet->stylesheet);
+        if (type->data != NULL) {
+            type->len  = ngx_strlen(type->data);
+            type->data = ngx_pstrdup(r->pool, type);
+        }
+    }
+
+    encoding->data = ngx_http_xsltproc_encoding(xslt_stylesheet->stylesheet);
+    if (encoding->data != NULL) {
+        encoding->len  = ngx_strlen(encoding->data);
+        encoding->data = ngx_pstrdup(r->pool, encoding);
+    }
+
+    doc_type = doc->type;
 
     rc = xsltSaveResultToString(&buf, &len, doc, xslt_stylesheet->stylesheet);
 
@@ -578,9 +687,9 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     b->last = buf + len;
     b->memory = 1;
 
-    if (encoding) {
-        r->headers_out.charset.len = ngx_strlen(encoding);
-        r->headers_out.charset.data = encoding;
+    if (encoding->data) {
+        r->headers_out.charset.len = encoding->len;
+        r->headers_out.charset.data = encoding->data;
     }
 
     if (r != r->main) {
@@ -589,12 +698,10 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
 
     b->last_buf = 1;
 
-    if (type) {
-        len = ngx_strlen(type);
-
-        r->headers_out.content_type_len = len;
-        r->headers_out.content_type.len = len;
-        r->headers_out.content_type.data = type;
+    if (type->data) {
+        r->headers_out.content_type_len = type->len;
+        r->headers_out.content_type.len = type->len;
+        r->headers_out.content_type.data = type->data;
 
     } else if (doc_type == XML_HTML_DOCUMENT_NODE) {
 
@@ -717,6 +824,49 @@ static void
 ngx_http_xsltproc_cleanup_dtd(void *data)
 {
     xmlFreeDtd(data);
+}
+
+
+static char *
+ngx_http_xsltproc_profiler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_xsltproc_filter_loc_conf_t *xlcf = conf;
+
+    ngx_str_t                             *value;
+    ngx_pool_cleanup_t                    *cln;
+    ngx_http_xsltproc_filter_main_conf_t  *xmcf;
+
+    if (xlcf->profiler) {
+        return "is duplicate";
+    }
+
+    value = cf->args->elts;
+
+    xmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_xsltproc_filter_module);
+
+    cln = ngx_pool_cleanup_add(cf->pool, 0);
+    if (cln == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    xlcf->profiler = xsltParseStylesheetFile((xmlChar *) value[1].data);
+
+    if (xlcf->profiler == NULL) {
+        ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "xsltParseStylesheetFile() failed");
+        return NGX_CONF_ERROR;
+    }
+
+    cln->handler = ngx_http_xsltproc_cleanup_profiler;
+    cln->data = xlcf->profiler;
+
+    return NGX_CONF_OK;
+}
+
+
+static void
+ngx_http_xsltproc_cleanup_profiler(void *data)
+{
+    xsltFreeStylesheet(data);
 }
 
 

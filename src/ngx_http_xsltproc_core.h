@@ -12,6 +12,7 @@
 #include <libxslt/documents.h>
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
+#include <libxslt/imports.h>
 #include <libxslt/keys.h>
 #include <libexslt/exslt.h>
 
@@ -33,6 +34,7 @@ typedef struct {
     ngx_flag_t           keys_caching;
 
     xmlDtdPtr            dtd;
+    xsltStylesheetPtr    profiler;
     ngx_hash_t           types;
     ngx_array_t         *types_keys;
 } ngx_http_xsltproc_filter_loc_conf_t;

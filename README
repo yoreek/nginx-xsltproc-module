@@ -9,6 +9,7 @@ Synopsis
             xsltproc        on;
             xsltproc_stylesheet_caching on;
             xsltproc_stylesheet_check_if_modify on;
+            xsltproc_stylesheet_profiler /var/www/example.com/template/profiler.xslt;
             xsltproc_types  application/xml;
             xml_entities    /site/dtd/entities.dtd;
 
@@ -32,7 +33,7 @@ Synopsis
         while ($request->Accept() >= 0) {
 
             print
-                "X-Xslt: /xslt/test.xslt?param1=1&param2='test'\r\n",
+                "X-Xslt-Stylesheet: /xslt/test.xslt?param1=1&param2='test'\r\n",
                 "Content-type: application/xml\r\n\r\n",
                 "<root></root>";
         }
@@ -42,7 +43,7 @@ Description
     a stylesheet in fastcgi script by passing a specified header.
 
     Header must be specified as:
-    X-Xslt: <stylesheet_path>[?<param>=<value>[&<param>=<value>...]]
+    X-Xslt-Stylesheet: <stylesheet_path>[?<param>=<value>[&<param>=<value>...]]
 
     Stylesheet path is root-relative.
 
@@ -76,6 +77,50 @@ Directives
 
         Turning this directive on will check if a stylesheet has been modified
         on every request and will update cache if need.
+
+    xsltproc_stylesheet_profiler
+        syntax: *xsltproc_stylesheet_profiler <stylesheet_path>*
+
+        default: *no*
+
+        context: *http, server, location*
+
+        If pattern is specified, the profile information will be collected
+        and added with this template in the resulting HTML document.
+
+        The structure of profile information:
+            <profiler>
+                <stylesheet uri="main.xsl">
+                  <profile>
+                    <template rank="1" name="" match="*" mode="" calls="20" time="444" />
+                    ...
+                  </profile>
+                  <document>
+                    <root>
+                      ...
+                    </root>
+                  </document>
+                  <params>
+                    <param name="name1" value="'value1'" />
+                    ...
+                  </params>
+                </stylesheet>
+                ...
+            </profiler>
+
+        An example the result document:
+            <html>
+                <head>
+                    ...
+                </head>
+                <body>
+                    ...
+                    <!-- the result of applying the profiler stylesheet -->
+                    <div id="profiler" class="profiler">
+                        ...
+                    </div>
+                </body>
+            </html
 
     xml_entities
         syntax: *xml_entities <path>*

@@ -69,6 +69,10 @@ static char * ngx_http_xsltproc_entities(ngx_conf_t *cf, ngx_command_t *cmd, voi
 
 static void ngx_http_xsltproc_cleanup_dtd(void *data);
 
+static char * ngx_http_xsltproc_profiler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+
+static void ngx_http_xsltproc_cleanup_profiler(void *data);
+
 static void * ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf);
 static void * ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf);
 static char * ngx_http_xsltproc_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child);
@@ -113,6 +117,13 @@ static ngx_command_t  ngx_http_xsltproc_filter_commands[] = {
     { ngx_string("xml_entities"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_xsltproc_entities,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL },
+
+    { ngx_string("xsltproc_stylesheet_profiler"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_xsltproc_profiler,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
       NULL },
