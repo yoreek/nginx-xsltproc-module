@@ -566,13 +566,15 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
 
                 /* add params */
                 child2 = xmlNewChild(child, NULL, BAD_CAST "params", NULL);
-                p = sheet[i].params.elts;
-                for(; *p != '\0'; p++) {
-                    child3 = xmlNewChild(child2, NULL, BAD_CAST "param", NULL);
+                if (sheet[i].params.nelts > 0) {
+                    p = sheet[i].params.elts;
+                    for(; *p != '\0'; p++) {
+                        child3 = xmlNewChild(child2, NULL, BAD_CAST "param", NULL);
 
-                    xmlSetProp(child3, BAD_CAST "name", BAD_CAST *p);
-                    p++;
-                    xmlSetProp(child3, BAD_CAST "value", BAD_CAST *p);
+                        xmlSetProp(child3, BAD_CAST "name", BAD_CAST *p);
+                        p++;
+                        xmlSetProp(child3, BAD_CAST "value", BAD_CAST *p);
+                    }
                 }
 
                 xmlFreeDoc(profile_info);

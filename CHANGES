@@ -1,3 +1,7 @@
+2012-02-26    VERSION 0.4
+    * added performance tests.
+    * fix bug when parameters for stylesheet is not defined.
+
 2012-02-25    VERSION 0.3
     * added stylesheet profiler.
     * renamed header name "X-Xslt" to "X-Xslt-Stylesheet".
