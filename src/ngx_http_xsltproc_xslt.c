@@ -104,6 +104,7 @@ static void ngx_http_xsltproc_xslt_restore_keys(ngx_http_xsltproc_xslt_styleshee
 }
 #endif
 
+#if (NGX_HTTP_XSLPROC_PROFILER)
 static void ngx_http_xsltproc_xslt_reset_profile_info(xsltTransformContextPtr ctxt) {
     xsltTemplatePtr   template;
     xsltStylesheetPtr style;
@@ -123,9 +124,10 @@ static void ngx_http_xsltproc_xslt_reset_profile_info(xsltTransformContextPtr ct
         style = xsltNextImport(style);
     }
 }
+#endif
 
 xmlDocPtr ngx_http_xsltproc_xslt_transform(ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet,
-    xmlDocPtr doc, const char **params, xmlDocPtr *profile_info)
+    xmlDocPtr doc, const char **params, int profiler, xmlDocPtr *profile_info)
 {
     xmlDocPtr result;
     xsltTransformContextPtr ctxt;
@@ -136,18 +138,22 @@ xmlDocPtr ngx_http_xsltproc_xslt_transform(ngx_http_xsltproc_xslt_stylesheet_t *
     ngx_http_xsltproc_xslt_restore_keys(xslt_stylesheet, &ctxt->docList);
 #endif
 
-    if (profile_info) {
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    if (profiler == 1) {
         /* reset internal template counters */
         ngx_http_xsltproc_xslt_reset_profile_info(ctxt);
 
         result = (xmlDocPtr) xsltApplyStylesheetUser(xslt_stylesheet->stylesheet, doc, params, NULL, stderr, ctxt);
 
-        if (result)
+        if (result && profile_info)
             *profile_info = xsltGetProfileInformation(ctxt);
     }
     else {
+#endif
         result = (xmlDocPtr) xsltApplyStylesheetUser(xslt_stylesheet->stylesheet, doc, params, NULL, NULL, ctxt);
+#if (NGX_HTTP_XSLPROC_PROFILER)
     }
+#endif
 
 #ifdef NGX_DEBUG
     print_imports(xslt_stylesheet->stylesheet);

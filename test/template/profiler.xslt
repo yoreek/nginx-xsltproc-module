@@ -9,8 +9,8 @@
 
 <!--
         /*
-         * <profiler>
-         *   <stylesheet uri="main.xsl">
+         * <profiler parse_header_time="20" parse_body_time="44">
+         *   <stylesheet uri="main.xsl" time="444">
          *     <profile>
          *       <template name="" match="*" mode="" ... />
          *       ...
@@ -31,11 +31,22 @@
 -->
 
 <xsl:template match="/profiler">
-	<xsl:variable name="total" select="format-number(sum(stylesheet/profile/template/@time) div 100, '#.##')" />
+	<xsl:variable name="transform_time" select="sum(stylesheet/@time)" />
+	<xsl:variable name="total" select="@parse_header_time + @parse_body_time + $transform_time" />
 
 	<div id="profiler" class="profiler">
 		<ul>
-			<li class="closed"><label><xsl:value-of select="concat('Profiler (', $total,' ms)')" /></label>
+			<li class="closed"><label><xsl:value-of select="concat(
+                    'Profiler (',
+                    format-number(@parse_header_time div 100, '#.##'),
+                    '/',
+                    format-number(@parse_body_time div 100, '#.##'),
+                    '/',
+                    format-number($transform_time div 100, '#.##'),
+                    '=',
+                    format-number($total div 100, '#.##'),
+                    ' ms)'
+                )" /></label>
 				<ul><xsl:apply-templates /></ul>
 			</li>
 		</ul>
@@ -45,7 +56,7 @@
 </xsl:template>
 
 <xsl:template match="stylesheet">
-	<xsl:variable name="total" select="format-number(sum(profile/template/@time) div 100, '#.##')" />
+	<xsl:variable name="total" select="format-number(@time div 100, '#.##')" />
 
 	<li><label><strong>Stylesheet:</strong> <xsl:value-of select="concat(@uri, ' (', $total,' ms)')" /></label>
 		<ul><xsl:apply-templates /></ul>

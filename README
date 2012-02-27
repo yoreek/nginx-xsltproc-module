@@ -78,19 +78,28 @@ Directives
         Turning this directive on will check if a stylesheet has been modified
         on every request and will update cache if need.
 
-    xsltproc_stylesheet_profiler
-        syntax: *xsltproc_stylesheet_profiler <stylesheet_path>*
+    xsltproc_profiler
+        syntax: *xsltproc_profiler on|off*
+
+        default: *xsltproc_profiler off*
+
+        context: *http, server, location*
+
+        Turning this directive on will enable collection the profile information.
+
+    xsltproc_profiler_stylesheet
+        syntax: *xsltproc_profiler_stylesheet <stylesheet_path>*
 
         default: *no*
 
         context: *http, server, location*
 
-        If pattern is specified, the profile information will be collected
-        and added with this template in the resulting HTML document.
+        If pattern is specified, the profile information added with this template
+        in the resulting HTML document.
 
         The structure of profile information:
-            <profiler>
-                <stylesheet uri="main.xsl">
+            <profiler parse_header_time="44" parse_body_time="10">
+                <stylesheet uri="main.xsl" time="111">
                   <profile>
                     <template rank="1" name="" match="*" mode="" calls="20" time="444" />
                     ...

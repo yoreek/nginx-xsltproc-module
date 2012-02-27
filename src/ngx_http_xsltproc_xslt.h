@@ -1,14 +1,6 @@
 #ifndef _NGX_HTTP_XSLTPROC_XSLT_H_INCLUDED_
 #define _NGX_HTTP_XSLTPROC_XSLT_H_INCLUDED_
 
-#ifndef NGX_HTTP_XSLPROC_XSLT_DOCUMENT_CACHING
-#define NGX_HTTP_XSLPROC_XSLT_DOCUMENT_CACHING  1
-#endif
-
-#ifndef NGX_HTTP_XSLPROC_XSLT_KEYS_CACHING
-#define NGX_HTTP_XSLPROC_XSLT_KEYS_CACHING  1
-#endif
-
 #define XSLT_KEYS_LIST_FREE_NONE 0
 #define XSLT_KEYS_LIST_FREE_DATA 1
 #define XSLT_KEYS_LIST_FREE_KEYS 2
@@ -43,7 +35,7 @@ typedef struct {
 /* ngx_http_xsltproc_xslt */
 xmlDocPtr ngx_http_xsltproc_xslt_transform(
     ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet, xmlDocPtr doc,
-    const char **params, xmlDocPtr *profile_info);
+    const char **params, int profiler, xmlDocPtr *profile_info);
 int ngx_http_xsltproc_xslt_output(char **buf, int *buf_len, xmlDocPtr result,
     ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet);
 void ngx_http_xsltproc_xslt_init(ngx_log_t *log);

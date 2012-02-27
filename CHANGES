@@ -1,3 +1,8 @@
+2012-02-27    VERSION 0.5
+    * fix many bugs.
+    * instead of "xsltproc_stylesheet_profiler" option made two options
+    "xsltproc_profiler" and "xsltproc_profiler_stylesheet".
+
 2012-02-26    VERSION 0.4
     * added performance tests.
     * fix bug when parameters for stylesheet is not defined.

@@ -37,6 +37,10 @@ typedef struct {
     xmlParserCtxtPtr     ctxt;
     ngx_http_request_t  *request;
     ngx_array_t         *sheets;       /* ngx_http_xsltproc_sheet_t */
+    long                 parse_header_start;
+    long                 parse_header_time;
+    long                 parse_body_start;
+    long                 parse_body_time;
 
     ngx_uint_t           done;         /* unsigned  done:1; */
 } ngx_http_xsltproc_filter_ctx_t;
@@ -69,9 +73,10 @@ static char * ngx_http_xsltproc_entities(ngx_conf_t *cf, ngx_command_t *cmd, voi
 
 static void ngx_http_xsltproc_cleanup_dtd(void *data);
 
-static char * ngx_http_xsltproc_profiler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-
-static void ngx_http_xsltproc_cleanup_profiler(void *data);
+#if (NGX_HTTP_XSLPROC_PROFILER)
+static char * ngx_http_xsltproc_profiler_stylesheet(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static void ngx_http_xsltproc_cleanup_profiler_stylesheet(void *data);
+#endif
 
 static void * ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf);
 static void * ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf);
@@ -121,12 +126,22 @@ static ngx_command_t  ngx_http_xsltproc_filter_commands[] = {
       0,
       NULL },
 
-    { ngx_string("xsltproc_stylesheet_profiler"),
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    { ngx_string("xsltproc_profiler"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, profiler),
+      NULL },
+
+    { ngx_string("xsltproc_profiler_stylesheet"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_http_xsltproc_profiler,
+      ngx_http_xsltproc_profiler_stylesheet,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
       NULL },
+#endif
 
     { ngx_string("xsltproc_types"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,

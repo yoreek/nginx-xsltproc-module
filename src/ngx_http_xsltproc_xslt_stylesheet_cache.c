@@ -57,7 +57,8 @@ ngx_http_xsltproc_xslt_stylesheet_cache_lookup(ngx_http_xsltproc_filter_loc_conf
         }
     }
 
-    if (found && cf->stylesheet_check_if_modify && ngx_http_xsltproc_xslt_stylesheet_is_updated(xslt_stylesheet)) {
+    if (found && cf->stylesheet_check_if_modify == 1
+        && ngx_http_xsltproc_xslt_stylesheet_is_updated(xslt_stylesheet)) {
 #ifdef NGX_DEBUG
         ngx_log_error_core(NGX_LOG_DEBUG, xslt_stylesheet_cache_log, 0,
                            "ngx_http_xsltproc_xslt_stylesheet_cache_lookup: stylesheet %s expired",

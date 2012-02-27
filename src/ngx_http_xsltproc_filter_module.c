@@ -201,6 +201,9 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     ngx_http_xsltproc_filter_ctx_t       *ctx;
     ngx_http_xsltproc_filter_loc_conf_t  *conf;
     ngx_array_t                          *sheets;
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    long                                  start = 0, end;
+#endif
 
     if (r->headers_out.status == NGX_HTTP_NOT_MODIFIED) {
         return ngx_http_next_header_filter(r);
@@ -208,8 +211,13 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
 
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    if (conf->profiler == 1)
+        start = xsltTimestamp();
+#endif
+
     /* next filter if this filter or content type not such as required */
-    if (conf->enable == 0 || ngx_http_test_content_type(r, &conf->types) == NULL)
+    if (conf->enable != 1 || ngx_http_test_content_type(r, &conf->types) == NULL)
     {
         return ngx_http_next_header_filter(r);
     }
@@ -253,6 +261,16 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     ngx_http_set_ctx(r, ctx, ngx_http_xsltproc_filter_module);
 
     ctx->sheets = sheets;
+
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    if (conf->profiler == 1) {
+        end   = xsltTimestamp();
+
+        ctx->parse_header_start = start;
+        ctx->parse_header_time  = end - start;
+        ctx->parse_body_start   = end;
+    }
+#endif
 
     r->main_filter_need_in_memory = 1;
 
@@ -504,21 +522,26 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     ngx_buf_t                            *b;
     ngx_uint_t                            i;
     xmlChar                              *buf;
-    xmlDocPtr                             doc, res, profile_info, summary_profile_info;
-    xmlNodePtr                            root, child, child2, child3;
+    xmlDocPtr                             doc, res;
     const char                          **p;
     ngx_http_xsltproc_sheet_t            *sheet;
     ngx_http_xsltproc_filter_loc_conf_t  *conf;
     ngx_http_xsltproc_xslt_stylesheet_t  *xslt_stylesheet;
-
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    xmlDocPtr                             profile_info, summary_profile_info;
+    xmlNodePtr                            root, child, child2, child3;
+    long                                  start, spent;
+    char                                  strbuf[100];
+#endif
     conf  = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
     sheet = ctx->sheets->elts;
     doc   = ctx->doc;
 
-    if (conf->profiler) {
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    if (conf->profiler == 1 && conf->profiler_stylesheet) {
         /*
-         * <profiler>
-         *   <stylesheet uri="main.xsl">
+         * <profiler parse_header_time="20" parse_body_time="44">
+         *   <stylesheet uri="main.xsl" time="444">
          *     <profile>
          *       <template name="" match="*" mode="" ... />
          *       ...
@@ -537,25 +560,43 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
          * </profiler>
          */
 
+        ctx->parse_body_time = xsltTimestamp() - ctx->parse_body_start;
+
         summary_profile_info = xmlNewDoc((const xmlChar*) "1.0");
         summary_profile_info->encoding = (const xmlChar*) xmlStrdup((const xmlChar*) "utf-8");
 
         root = xmlNewDocNode(summary_profile_info, NULL, BAD_CAST "profiler", NULL);
         xmlDocSetRootElement(summary_profile_info, root);
+
+        sprintf(strbuf, "%ld", ctx->parse_header_time);
+        xmlSetProp(root, BAD_CAST "parse_header_time", BAD_CAST strbuf);
+
+        sprintf(strbuf, "%ld", ctx->parse_body_time);
+        xmlSetProp(root, BAD_CAST "parse_body_time", BAD_CAST strbuf);
     }
+#endif
 
     for (i = 0; i < ctx->sheets->nelts; i++) {
         xslt_stylesheet = sheet[i].xslt_stylesheet;
 
-        if (conf->profiler) {
+#if (NGX_HTTP_XSLPROC_PROFILER)
+        if (conf->profiler == 1 && conf->profiler_stylesheet) {
             profile_info = NULL;
 
-            res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc, sheet[i].params.elts, &profile_info);
+            start = xsltTimestamp();
+
+            res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc,
+                sheet[i].params.elts, conf->profiler, &profile_info);
+
+            spent = xsltTimestamp() - start;
 
             if (res && profile_info) {
                 /* add stylesheet info */
                 child = xmlNewChild(root, NULL, BAD_CAST "stylesheet", NULL);
                 xmlSetProp(child, BAD_CAST "uri", BAD_CAST xslt_stylesheet->uri);
+
+                sprintf(strbuf, "%ld", spent);
+                xmlSetProp(child, BAD_CAST "time", BAD_CAST strbuf);
 
                 /* add profile info */
                 xmlAddChild(child, xmlDocCopyNode(xmlDocGetRootElement(profile_info), summary_profile_info, 1));
@@ -589,9 +630,13 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
             }
         }
         else {
-            res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc, sheet[i].params.elts, NULL);
+            res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc,
+                sheet[i].params.elts, conf->profiler, NULL);
         }
-
+#else
+        res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc,
+            sheet[i].params.elts, 0, NULL);
+#endif
         xmlFreeDoc(doc);
 
         if (res == NULL) {
@@ -603,8 +648,9 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
         doc = res;
     }
 
-    if (conf->profiler) {
-        res = xsltApplyStylesheet(conf->profiler, summary_profile_info, NULL);
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    if (conf->profiler == 1 && conf->profiler_stylesheet) {
+        res = xsltApplyStylesheet(conf->profiler_stylesheet, summary_profile_info, NULL);
 
         if (res) {
             root = xmlDocCopyNode(xmlDocGetRootElement(res), doc, 1);
@@ -626,6 +672,7 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
 
         xmlFreeDoc(summary_profile_info);
     }
+#endif
 
     /* there must be at least one stylesheet */
 
@@ -661,7 +708,7 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
 
     xmlFreeDoc(doc);
 
-    if (conf->stylesheet_caching == 0) {
+    if (conf->stylesheet_caching != 1) {
         for (i = 0; i < ctx->sheets->nelts; i++) {
             ngx_http_xsltproc_xslt_stylesheet_free(xslt_stylesheet);
         }
@@ -829,8 +876,9 @@ ngx_http_xsltproc_cleanup_dtd(void *data)
 }
 
 
+#if (NGX_HTTP_XSLPROC_PROFILER)
 static char *
-ngx_http_xsltproc_profiler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+ngx_http_xsltproc_profiler_stylesheet(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_http_xsltproc_filter_loc_conf_t *xlcf = conf;
 
@@ -838,7 +886,7 @@ ngx_http_xsltproc_profiler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_pool_cleanup_t                    *cln;
     ngx_http_xsltproc_filter_main_conf_t  *xmcf;
 
-    if (xlcf->profiler) {
+    if (xlcf->profiler_stylesheet) {
         return "is duplicate";
     }
 
@@ -851,26 +899,26 @@ ngx_http_xsltproc_profiler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_CONF_ERROR;
     }
 
-    xlcf->profiler = xsltParseStylesheetFile((xmlChar *) value[1].data);
+    xlcf->profiler_stylesheet = xsltParseStylesheetFile((xmlChar *) value[1].data);
 
-    if (xlcf->profiler == NULL) {
+    if (xlcf->profiler_stylesheet == NULL) {
         ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "xsltParseStylesheetFile() failed");
         return NGX_CONF_ERROR;
     }
 
-    cln->handler = ngx_http_xsltproc_cleanup_profiler;
-    cln->data = xlcf->profiler;
+    cln->handler = ngx_http_xsltproc_cleanup_profiler_stylesheet;
+    cln->data = xlcf->profiler_stylesheet;
 
     return NGX_CONF_OK;
 }
 
 
 static void
-ngx_http_xsltproc_cleanup_profiler(void *data)
+ngx_http_xsltproc_cleanup_profiler_stylesheet(void *data)
 {
     xsltFreeStylesheet(data);
 }
-
+#endif
 
 static void *
 ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf)
@@ -927,6 +975,9 @@ ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf)
     conf->stylesheet_check_if_modify = NGX_CONF_UNSET;
     conf->document_caching           = NGX_CONF_UNSET;
     conf->keys_caching               = NGX_CONF_UNSET;
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    conf->profiler                   = NGX_CONF_UNSET;
+#endif
 
     return conf;
 }

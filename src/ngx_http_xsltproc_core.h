@@ -26,15 +26,29 @@ time_t ngx_http_xsltproc_last_modify(const char *file_name);
 
 #include "ngx_http_xsltproc_list.h"
 
+#ifndef NGX_HTTP_XSLPROC_PROFILER
+#define NGX_HTTP_XSLPROC_PROFILER  1
+#endif
+
+#ifndef NGX_HTTP_XSLPROC_XSLT_DOCUMENT_CACHING
+#define NGX_HTTP_XSLPROC_XSLT_DOCUMENT_CACHING  1
+#endif
+
+#ifndef NGX_HTTP_XSLPROC_XSLT_KEYS_CACHING
+#define NGX_HTTP_XSLPROC_XSLT_KEYS_CACHING  1
+#endif
+
 typedef struct {
     ngx_flag_t           enable;
     ngx_flag_t           stylesheet_caching;
     ngx_flag_t           stylesheet_check_if_modify;
     ngx_flag_t           document_caching;
     ngx_flag_t           keys_caching;
-
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    ngx_flag_t           profiler;
+    xsltStylesheetPtr    profiler_stylesheet;
+#endif
     xmlDtdPtr            dtd;
-    xsltStylesheetPtr    profiler;
     ngx_hash_t           types;
     ngx_array_t         *types_keys;
 } ngx_http_xsltproc_filter_loc_conf_t;

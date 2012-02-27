@@ -22,7 +22,7 @@ ngx_http_xsltproc_xslt_stylesheet_t *
 ngx_http_xsltproc_xslt_stylesheet_parse_file(ngx_http_xsltproc_filter_loc_conf_t *cf, char *uri) {
     ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet;
 
-    if (cf->stylesheet_caching) {
+    if (cf->stylesheet_caching == 1) {
 #ifdef NGX_DEBUG
         ngx_log_error_core(NGX_LOG_DEBUG, xslt_stylesheet_log, 0,
                            "ngx_http_xsltproc_xslt_stylesheet_parse_file: cache lookup \"%s\"",
