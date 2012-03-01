@@ -1001,6 +1001,23 @@ ngx_http_xsltproc_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child)
         return NGX_CONF_ERROR;
     }
 
+    ngx_conf_merge_value(conf->enable,
+        prev->enable, 0);
+
+    ngx_conf_merge_value(conf->stylesheet_caching,
+        prev->stylesheet_caching, 0);
+
+    ngx_conf_merge_value(conf->stylesheet_check_if_modify,
+        prev->stylesheet_check_if_modify, 0);
+
+#if (NGX_HTTP_XSLPROC_PROFILER)
+    ngx_conf_merge_value(conf->profiler,
+        prev->profiler, 0);
+
+    if (conf->profiler_stylesheet == NULL)
+        conf->profiler_stylesheet = prev->profiler_stylesheet;
+#endif
+
     return NGX_CONF_OK;
 }
 
