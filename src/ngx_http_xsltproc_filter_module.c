@@ -114,20 +114,19 @@ ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params)
 
 
 static ngx_int_t
-ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_array_t *sheets)
+ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root, ngx_array_t *sheets)
 {
-    size_t                     root;
     ngx_uint_t                 i, flags;
     ngx_list_part_t           *part;
     ngx_table_elt_t           *h;
     ngx_str_t                  path;
+    u_char                    *last;
     ngx_http_request_t         xslt_r;
     ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet;
     ngx_http_xsltproc_sheet_t *sheet;
 
     memcpy(&xslt_r, r, sizeof(xslt_r));
 
-    root = 0;
     part = &r->headers_out.headers.part;
     h    = part->elts;
 
@@ -161,9 +160,15 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_array_t *sheets)
                 xslt_r.args.data = xslt_r.args_start;
             }
 
-            ngx_http_map_uri_to_path(&xslt_r, &path, &root, 0);
-
-            path.len--;
+            /* path = stylesheet_root + uri */
+            path.len  = root->len + xslt_r.uri.len;
+            path.data = ngx_pnalloc(r->pool, path.len + 1);
+            if (path.data == NULL) {
+                return NGX_ERROR;
+            }
+            last  = ngx_copy(path.data, root->data, root->len);
+            last  = ngx_copy(last, xslt_r.uri.data, xslt_r.uri.len);
+            *last = '\0';
 
             if (ngx_http_xsltproc_parse_stylesheet(r, path.data, &xslt_stylesheet)
                 != NGX_OK)
@@ -235,7 +240,7 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     }
 
     /* parse header */
-    if (ngx_http_xsltproc_parse_header(r, sheets) != NGX_OK) {
+    if (ngx_http_xsltproc_parse_header(r, &conf->stylesheet_root, sheets) != NGX_OK) {
         return NGX_ERROR;
     }
 
@@ -968,6 +973,7 @@ ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf)
      *     conf->dtd = NULL;
      *     conf->types = { NULL };
      *     conf->types_keys = NULL;
+     *     conf->stylesheet_root.len = { 0, NULL };
      */
 
     conf->enable                     = NGX_CONF_UNSET;
@@ -1009,6 +1015,9 @@ ngx_http_xsltproc_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child)
 
     ngx_conf_merge_value(conf->stylesheet_check_if_modify,
         prev->stylesheet_check_if_modify, 0);
+
+    ngx_conf_merge_str_value(conf->stylesheet_root,
+        prev->stylesheet_root, "");
 
 #if (NGX_HTTP_XSLPROC_PROFILER)
     ngx_conf_merge_value(conf->profiler,

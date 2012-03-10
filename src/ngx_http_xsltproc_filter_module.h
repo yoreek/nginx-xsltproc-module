@@ -49,7 +49,7 @@ typedef struct {
 static ngx_int_t ngx_http_xsltproc_parse_stylesheet(ngx_http_request_t *r,
     u_char *name, ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet);
 static ngx_int_t ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params);
-static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_array_t *sheets);
+static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root, ngx_array_t *sheets);
 static ngx_int_t ngx_http_xsltproc_header_filter(ngx_http_request_t *r);
 
 static ngx_int_t ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in);
@@ -117,6 +117,14 @@ static ngx_command_t  ngx_http_xsltproc_filter_commands[] = {
       ngx_conf_set_flag_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_xsltproc_filter_loc_conf_t, stylesheet_check_if_modify),
+      NULL },
+
+    { ngx_string("xsltproc_stylesheet_root"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, stylesheet_root),
       NULL },
 
     { ngx_string("xml_entities"),

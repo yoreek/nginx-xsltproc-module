@@ -1,0 +1,30 @@
+An overlay to use with layman is provided. If gentoo overlays and/or layman are new to you,
+read about them, as they are an essential part of gentoo.
+
+This example assumes you never used layman before.
+
+1. Install layman
+### install layman (with git support)
+### you don't need to if you used layman before, obviously
+echo "app-portage/layman git" >> /etc/portage/package.use
+emerge layman
+
+### Note: for Layman version 1.3.0 or later use:
+echo "source /var/lib/layman/make.conf" >> /etc/make.conf
+
+### Note: for Layman version <1.3.0 use:
+echo "source /usr/local/portage/layman/make.conf" >> /etc/make.conf
+
+2. Install Nginx Overlay with XsltProc plugin support
+### add overlay to layman
+layman -f -a yoreek
+
+### install game and lobby
+emerge nginx
+
+3. Upgrading
+### update the repository and check for new versions
+layman -S
+
+### upgrade existing installations
+emerge -u nginx

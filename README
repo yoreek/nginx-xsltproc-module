@@ -8,6 +8,7 @@ Synopsis
         location / {
             xsltproc        on;
             xsltproc_stylesheet_caching on;
+            xsltproc_stylesheet_root /var/www/example.com/template;
             xsltproc_stylesheet_check_if_modify on;
             xsltproc_stylesheet_profiler /var/www/example.com/template/profiler.xslt;
             xsltproc_types  application/xml;
@@ -55,16 +56,25 @@ Directives
 
         default: *xsltproc off*
 
-        context: *http, server, location*
+        context: *http, server, location, if in location*
 
         Turning this directive on will enable XSLT processing.
+
+    xsltproc_stylesheet_root
+        syntax: *xsltproc_stylesheet_root <root_path>*
+
+        default: *no*
+
+        context: *http, server, location, if in location*
+
+        Sets the root directory for xslt-templates.
 
     xsltproc_stylesheet_caching
         syntax: *xsltproc_stylesheet_caching on|off*
 
         default: *xsltproc_stylesheet_caching off*
 
-        context: *http, server, location*
+        context: *http, server, location, if in location*
 
         Turning this directive on will enable stylesheet caching.
 
@@ -73,7 +83,7 @@ Directives
 
         default: *xsltproc_stylesheet_check_if_modify off*
 
-        context: *http, server, location*
+        context: *http, server, location, if in location*
 
         Turning this directive on will check if a stylesheet has been modified
         on every request and will update cache if need.
@@ -83,7 +93,7 @@ Directives
 
         default: *xsltproc_profiler off*
 
-        context: *http, server, location*
+        context: *http, server, location, if in location*
 
         Turning this directive on will enable collection the profile information.
 
@@ -92,9 +102,9 @@ Directives
 
         default: *no*
 
-        context: *http, server, location*
+        context: *http, server, location, if in location*
 
-        If pattern is specified, the profile information added with this template
+        If parameter is specified, the profile information added with this template
         in the resulting HTML document.
 
         The structure of profile information:
@@ -136,7 +146,7 @@ Directives
 
         default: *no*
 
-        context: *http, server, location*
+        context: *http, server, location, if in location*
 
         Specifies the DTD file which describes symbolic elements (xml entities).
         This file is compiled at the stage of configuration. For technical
@@ -152,7 +162,7 @@ Directives
 
         default: *xsltproc_types text/xml*
 
-        context: *http, server, location*
+        context: *http, server, location, if in location*
 
         Permit processing responses with specified MIME-types in addition to "text/xml".
         If XSLT output mode is HTML, then the response MIME-type changes to "text/HTML".

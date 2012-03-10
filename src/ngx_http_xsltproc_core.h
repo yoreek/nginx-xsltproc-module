@@ -42,6 +42,7 @@ typedef struct {
     ngx_flag_t           enable;
     ngx_flag_t           stylesheet_caching;
     ngx_flag_t           stylesheet_check_if_modify;
+    ngx_str_t            stylesheet_root;
     ngx_flag_t           document_caching;
     ngx_flag_t           keys_caching;
 #if (NGX_HTTP_XSLPROC_PROFILER)

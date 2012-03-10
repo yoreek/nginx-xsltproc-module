@@ -21,7 +21,7 @@ while (1) {
     my $step = $request->param('step') || 1;
 
     print "Content-type: application/xml\r\n",
-          "X-Xslt-Stylesheet: /template/$tmpl.xslt?step=$step\r\n",
+          "X-Xslt-Stylesheet: /$tmpl.xslt?step=$step\r\n",
           "\r\n<root />\n";
 
     $request = undef;
