@@ -5,6 +5,10 @@
 #define XSLT_KEYS_LIST_FREE_DATA 1
 #define XSLT_KEYS_LIST_FREE_KEYS 2
 
+#define XSLT_FUNCTION_URL "http://nginx.org/xsltproc"
+
+typedef UChar32 (*ngx_http_xsltproc_xslt_case_convert_func_t) (UChar32 c);
+
 typedef struct {
     ngx_http_xsltproc_list_t  list;
     char                     *uri;
@@ -94,5 +98,8 @@ void ngx_http_xsltproc_xslt_keys_cache_get(ngx_http_xsltproc_list_t *xslt_keys_l
     char *stylesheet_uri, time_t stylesheet_mtime);
 void ngx_http_xsltproc_xslt_keys_cache_expire(char *stylesheet_uri, time_t stylesheet_mtime,
     char *document_uri, time_t document_mtime);
+
+/* ngx_http_xsltproc_function */
+int ngx_http_xsltproc_xslt_function_init(ngx_log_t *log);
 
 #endif /* _NGX_HTTP_XSLTPROC_XSLT_H_INCLUDED_ */

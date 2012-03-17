@@ -176,6 +176,7 @@ void ngx_http_xsltproc_xslt_init(ngx_log_t *log) {
     /*xsltRegisterTestModule();*/
     /*xsltDebugDumpExtensions(NULL);*/
 
+    ngx_http_xsltproc_xslt_function_init(log);
     ngx_http_xsltproc_xslt_stylesheet_init(log);
 
 #if (NGX_HTTP_XSLPROC_XSLT_DOCUMENT_CACHING)

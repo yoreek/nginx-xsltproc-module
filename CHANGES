@@ -1,3 +1,6 @@
+2012-03-17    VERSION 0.8
+    * added some xslt functions (uc, lc, join, ltrim, rtrim, trim).
+
 2012-03-10    VERSION 0.7
     * added "xslproc_stylesheet_root" option.
 

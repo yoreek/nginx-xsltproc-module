@@ -167,6 +167,74 @@ Directives
         Permit processing responses with specified MIME-types in addition to "text/xml".
         If XSLT output mode is HTML, then the response MIME-type changes to "text/HTML".
 
+Using XSLT functions
+    <xsl:stylesheet version="1.0"
+        xmlns:ngx="http://nginx.org/xsltproc"
+        extension-element-prefixes="ngx"
+    >
+
+    ...
+
+    </xsl:stylesheet>
+
+    ngx:join
+        syntax: *string ngx:join(node-set, sep)*
+
+        Returns a string created by concatenating the string arguments and using
+        the sep argument as the separator.
+
+        example: ngx:join('string1', 'string2', /root/item, ', ')
+
+        xml: '<root><item>item1</item><item>item2</item></root>'
+
+        result: 'string1, string2, item1, item2'
+
+    ngx:uc
+        syntax: *string ngx:uc(string)*
+
+        Converts the string argument to upper-case
+
+        example: ngx:uc('abcDEF')
+
+        result: 'ABCDEF'
+
+    ngx:lc
+        syntax: *string ngx:lc(string)*
+
+        Converts the string argument to lower-case
+
+        example: *ngx:lc('abcDEF')*
+
+        result: 'abcdef'
+
+    ngx:ltrim
+        syntax: *string ngx:ltrim(string)*
+
+        Strip whitespace from the beginning of a string
+
+        example: ngx:ltrim('   string')
+
+        result: 'string'
+
+    ngx:rtrim
+        syntax: *string ngx:rtrim(string)*
+
+        Strip whitespace from the end of a string
+
+        example: ngx:rtrim('string    ')
+
+        result: 'string'
+
+    ngx:trim
+        syntax: *string ngx:trim(string)*
+
+        Strip whitespace from the beginning and end of a string
+
+        example: ngx:trim('    string    ')
+
+        result: 'string'
+
+
 Installation
     Grab the nginx source code from nginx.org (<http://nginx.org/>), for
     example, the version 1.0.11, and then build the source with this module:

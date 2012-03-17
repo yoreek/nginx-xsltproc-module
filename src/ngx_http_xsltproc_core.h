@@ -7,6 +7,8 @@
 #include <libxml/parser.h>
 #include <libxml/xmlsave.h>
 #include <libxml/tree.h>
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
 #include <libxslt/xslt.h>
 #include <libxslt/xsltInternals.h>
 #include <libxslt/documents.h>
@@ -14,7 +16,14 @@
 #include <libxslt/xsltutils.h>
 #include <libxslt/imports.h>
 #include <libxslt/keys.h>
+#include <libxslt/extensions.h>
 #include <libexslt/exslt.h>
+
+#include <unicode/ucnv.h>
+#include <unicode/ustring.h>
+#include <unicode/utypes.h>
+#include <unicode/uloc.h>
+#include <unicode/ucol.h>
 
 #include <ngx_config.h>
 #include <ngx_core.h>
