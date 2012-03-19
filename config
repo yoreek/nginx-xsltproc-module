@@ -153,7 +153,7 @@ fi
 
 
 if [ $ngx_found = yes ]; then
-    CORE_LIBS="$CORE_LIBS -lexslt"
+    CORE_LIBS="$CORE_LIBS -lexslt -licui18n -licuuc -licudata"
 fi
 
 ngx_addon_name=ngx_http_xsltproc_filter_module
