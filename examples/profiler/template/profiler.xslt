@@ -30,8 +30,10 @@
          */
 -->
 
+<xsl:variable name="REPEAT" select="/profiler/@repeat" />
+
 <xsl:template match="/profiler">
-	<xsl:variable name="transform_time" select="sum(stylesheet/@time)" />
+	<xsl:variable name="transform_time" select="sum(stylesheet/@time) div $REPEAT" />
 	<xsl:variable name="total" select="@parse_header_time + @parse_body_time + $transform_time" />
 
 	<div id="profiler" class="profiler">
@@ -43,6 +45,8 @@
                     format-number(@parse_body_time div 100, '#.##'),
                     '/',
                     format-number($transform_time div 100, '#.##'),
+                    'x',
+                    $REPEAT,
                     '=',
                     format-number($total div 100, '#.##'),
                     ' ms)'
@@ -56,7 +60,7 @@
 </xsl:template>
 
 <xsl:template match="stylesheet">
-	<xsl:variable name="total" select="format-number(@time div 100, '#.##')" />
+	<xsl:variable name="total" select="format-number(@time div 100 div $REPEAT, '#.##')" />
 
 	<li><label><strong>Stylesheet:</strong> <xsl:value-of select="concat(@uri, ' (', $total,' ms)')" /></label>
 		<ul><xsl:apply-templates /></ul>
@@ -74,8 +78,8 @@
 						<td><xsl:value-of select="@match" /></td>
 						<td><xsl:value-of select="@name" /></td>
 						<td><xsl:value-of select="@mode" /></td>
-						<td><xsl:value-of select="@calls" /></td>
-						<td><xsl:value-of select="format-number(@time div 100, '#.##')" /></td>
+						<td><xsl:value-of select="@calls div $REPEAT" /></td>
+						<td><xsl:value-of select="format-number(@time div 100 div $REPEAT, '#.##')" /></td>
 						<td><xsl:value-of select="format-number(@time div @calls div 100, '#.##')" /></td>
 					</tr>
 				</xsl:for-each>

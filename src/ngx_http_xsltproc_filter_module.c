@@ -9,7 +9,6 @@
 static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 
-
 static ngx_int_t
 ngx_http_xsltproc_parse_stylesheet(ngx_http_request_t *r,
     u_char *name, ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet)
@@ -113,17 +112,24 @@ ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params)
 }
 
 
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
 static ngx_int_t
-ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root, ngx_array_t *sheets)
+ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root,
+                               ngx_array_t *sheets, ngx_str_t *memcached_key)
+#else
+static ngx_int_t
+ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root,
+                               ngx_array_t *sheets)
+#endif
 {
-    ngx_uint_t                 i, flags;
-    ngx_list_part_t           *part;
-    ngx_table_elt_t           *h;
-    ngx_str_t                  path;
-    u_char                    *last;
-    ngx_http_request_t         xslt_r;
+    ngx_uint_t                           i, flags;
+    ngx_list_part_t                     *part;
+    ngx_table_elt_t                     *h;
+    ngx_str_t                            path;
+    u_char                              *last;
+    ngx_http_request_t                   xslt_r;
     ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet;
-    ngx_http_xsltproc_sheet_t *sheet;
+    ngx_http_xsltproc_sheet_t           *sheet;
 
     memcpy(&xslt_r, r, sizeof(xslt_r));
 
@@ -194,6 +200,26 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root, ngx_array
             /* hide header */
             h[i].hash = 0;
         }
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+        else if (h[i].key.len == sizeof("x-xslt-memcached-key") -1
+            && ngx_strncasecmp(h[i].key.data,
+                                (u_char *) "x-xslt-memcached-key",
+                                sizeof("x-xslt-memcached-key") - 1)
+            == 0)
+        {
+            memcached_key->len  = h[i].value.len;
+            memcached_key->data = ngx_pnalloc(r->pool, h[i].value.len);
+
+            if (memcached_key->data == NULL) {
+                return NGX_ERROR;
+            }
+
+            ngx_memcpy(memcached_key->data, h[i].value.data, h[i].value.len);
+
+            /* hide header */
+            h[i].hash = 0;
+        }
+#endif
     }
 
     return NGX_OK;
@@ -206,7 +232,10 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     ngx_http_xsltproc_filter_ctx_t       *ctx;
     ngx_http_xsltproc_filter_loc_conf_t  *conf;
     ngx_array_t                          *sheets;
-#if (NGX_HTTP_XSLPROC_PROFILER)
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+    ngx_str_t                             memcached_key;
+#endif
+#if (NGX_HTTP_XSLTPROC_PROFILER)
     long                                  start = 0, end;
 #endif
 
@@ -216,7 +245,7 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
 
-#if (NGX_HTTP_XSLPROC_PROFILER)
+#if (NGX_HTTP_XSLTPROC_PROFILER)
     if (conf->profiler == 1)
         start = xsltTimestamp();
 #endif
@@ -240,7 +269,14 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     }
 
     /* parse header */
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+    memcached_key.data = NULL;
+    memcached_key.len = 0;
+
+    if (ngx_http_xsltproc_parse_header(r, &conf->stylesheet_root, sheets, &memcached_key) != NGX_OK) {
+#else
     if (ngx_http_xsltproc_parse_header(r, &conf->stylesheet_root, sheets) != NGX_OK) {
+#endif
         return NGX_ERROR;
     }
 
@@ -267,13 +303,38 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
 
     ctx->sheets = sheets;
 
-#if (NGX_HTTP_XSLPROC_PROFILER)
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+    if (conf->memcached_enable == 1
+        && conf->memcached != NULL
+        && (memcached_key.len > 0 || conf->memcached_key_auto == 1)
+    ) {
+        ctx->memcached                 = conf->memcached;
+
+        ctx->memcached_key.len         = memcached_key.len;
+        ctx->memcached_key.data        = memcached_key.data;
+
+        ctx->memcached_key_prefix.len  = conf->memcached_key_prefix.len;
+        ctx->memcached_key_prefix.data = conf->memcached_key_prefix.data;
+
+        ctx->memcached_expire          = conf->memcached_expire;
+    }
+#endif
+
+#if (NGX_HTTP_XSLTPROC_PROFILER)
     if (conf->profiler == 1) {
+        ctx->profiler = ngx_pcalloc(r->pool, sizeof(ngx_http_xsltproc_profiler_t));
+        if (ctx->profiler == NULL) {
+            return NGX_ERROR;
+        }
+
         end   = xsltTimestamp();
 
-        ctx->parse_header_start = start;
-        ctx->parse_header_time  = end - start;
-        ctx->parse_body_start   = end;
+        ctx->profiler->parse_header_start = start;
+        ctx->profiler->parse_header_time  = end - start;
+        ctx->profiler->parse_body_start   = end;
+
+        if (conf->profiler_repeat == 1)
+            ctx->profiler->repeat = 20;
     }
 #endif
 
@@ -282,13 +343,146 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     return NGX_OK;
 }
 
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+static ngx_buf_t *
+ngx_http_xsltproc_memcached_get(ngx_http_request_t *r, ngx_chain_t *in,
+                                ngx_http_xsltproc_filter_ctx_t *ctx)
+{
+    ngx_chain_t                         *cl;
+    ngx_uint_t                           i, j;
+    int                                  doc_type = 0;
+    xmlChar                             *value;
+    size_t                               value_length;
+    uint32_t                             flags;
+    memcached_return_t                   memcached_return;
+    ngx_buf_t                           *b;
+    ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet;
+    ngx_http_xsltproc_sheet_t           *sheet;
+    ngx_md5_t                            md5;
+    u_char                               md5_buf[16];
+    char                               **params;
+
+    sheet = ctx->sheets->elts;
+
+    ctx->memcached_done = 1;
+
+    ctx->memcached_key_real.data = ctx->memcached_key.data;
+    ctx->memcached_key_real.len  = ctx->memcached_key.len;
+
+    if (ctx->memcached_key_prefix.len > 0 || ctx->memcached_key.len == 0) {
+        ctx->memcached_key_real.len = ctx->memcached_key.len + ctx->memcached_key_prefix.len;
+        if (ctx->memcached_key.len == 0)
+            ctx->memcached_key_real.len += 32;
+
+        ctx->memcached_key_real.data = ngx_pcalloc(r->pool, ctx->memcached_key_real.len);
+        if (ctx->memcached_key_real.data == NULL)
+            return NULL;
+
+        if (ctx->memcached_key_prefix.len > 0)
+            ngx_copy(ctx->memcached_key_real.data, ctx->memcached_key_prefix.data,
+                     ctx->memcached_key_prefix.len);
+    }
+
+    /* calculate key */
+    if (ctx->memcached_key.len == 0) {
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                      "ngx_http_xsltproc_memcached_get() calculate key");
+
+        ngx_md5_init(&md5);
+
+        for (cl = in; cl; cl = cl->next) {
+            ngx_md5_update(&md5, cl->buf->pos, cl->buf->last - cl->buf->pos);
+        }
+
+        for (i = 0; i < ctx->sheets->nelts; i++) {
+            xslt_stylesheet = sheet[i].xslt_stylesheet;
+            ngx_md5_update(&md5, xslt_stylesheet->uri, ngx_strlen(xslt_stylesheet->uri));
+            ngx_md5_update(&md5, &xslt_stylesheet->mtime, sizeof(time_t));
+
+            params = sheet[i].params.elts;
+            for (j = 0; j < (sheet[i].params.nelts - 1); j++) {
+                ngx_md5_update(&md5, params[j], ngx_strlen(params[j]));
+            }
+        }
+
+        ngx_md5_final(md5_buf, &md5);
+
+        ngx_hex_dump(&ctx->memcached_key_real.data[ctx->memcached_key_prefix.len], md5_buf, 16);
+    }
+    else {
+        ngx_copy(&ctx->memcached_key_real.data[ctx->memcached_key_prefix.len],
+                 ctx->memcached_key.data, ctx->memcached_key.len);
+    }
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                  "ngx_http_xsltproc_memcached_get() key: '%V'", &ctx->memcached_key_real);
+
+    value = (xmlChar *) memcached_get(ctx->memcached, (const char *)ctx->memcached_key_real.data,
+        ctx->memcached_key_real.len, &value_length, &flags, &memcached_return);
+
+    if (memcached_return != MEMCACHED_SUCCESS) {
+        return NULL;
+    }
+
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                  "ngx_http_xsltproc_memcached_get() found key: '%V' data size: %d",
+                  &ctx->memcached_key_real, value_length);
+
+    /* mark buffers as completed */
+    for (cl = in; cl; cl = cl->next) {
+        cl->buf->pos = cl->buf->last;
+    }
+
+    doc_type        = (int) flags;
+    b               = NULL;
+    xslt_stylesheet = sheet[ctx->sheets->nelts - 1].xslt_stylesheet;
+
+    if (ngx_http_xsltproc_apply_encoding(r, xslt_stylesheet, doc_type) == NGX_OK) {
+        b = ngx_pcalloc(r->pool, sizeof(ngx_buf_t));
+        if (b == NULL) {
+            ngx_free(value);
+            return NULL;
+        }
+
+        b->pos    = (u_char *) value;
+        b->last   = (u_char *) (value + value_length);
+        b->memory = 1;
+
+        if (r == r->main) {
+            b->last_buf = 1;
+        }
+    }
+
+    return b;
+}
+
+static void
+ngx_http_xsltproc_memcached_set(ngx_http_request_t *r, ngx_buf_t *b, int doc_type,
+                                ngx_http_xsltproc_filter_ctx_t *ctx)
+{
+    memcached_return_t memcached_return;
+
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                  "ngx_http_xsltproc_memcached_set() key: '%V' data size: %d",
+                  &ctx->memcached_key_real, b->last - b->pos);
+
+    memcached_return = memcached_set(ctx->memcached, (const char *)ctx->memcached_key_real.data,
+        ctx->memcached_key_real.len, (char *) b->pos, b->last - b->pos, ctx->memcached_expire, doc_type);
+
+    if (memcached_return != MEMCACHED_SUCCESS) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "ngx_http_xsltproc_memcached_set() failure");
+    }
+}
+#endif
 
 static ngx_int_t
 ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
-    int                              wellFormed;
-    ngx_chain_t                     *cl;
-    ngx_http_xsltproc_filter_ctx_t  *ctx;
+    int                                  wellFormed, doc_type = 0;
+    ngx_chain_t                         *cl;
+    ngx_http_xsltproc_filter_ctx_t      *ctx;
+    ngx_buf_t                           *b;
 
     if (in == NULL) {
         return ngx_http_next_body_filter(r, in);
@@ -299,6 +493,15 @@ ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     if (ctx == NULL || ctx->sheets->nelts == 0 || ctx->done) {
         return ngx_http_next_body_filter(r, in);
     }
+
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+    if (ctx->memcached != NULL && ctx->memcached_done == 0) {
+        b = ngx_http_xsltproc_memcached_get(r, in, ctx);
+
+        if (b != NULL)
+            return ngx_http_xsltproc_send(r, ctx, b);
+    }
+#endif
 
     for (cl = in; cl; cl = cl->next) {
 
@@ -330,8 +533,15 @@ ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             xmlFreeParserCtxt(ctx->ctxt);
 
             if (wellFormed) {
-                return ngx_http_xsltproc_send(r, ctx,
-                                       ngx_http_xsltproc_apply_stylesheet(r, ctx));
+                b = ngx_http_xsltproc_apply_stylesheet(r, ctx, &doc_type);
+
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+                if (ctx->memcached != NULL && b != NULL) {
+                    ngx_http_xsltproc_memcached_set(r, b, doc_type, ctx);
+                }
+#endif
+
+                return ngx_http_xsltproc_send(r, ctx, b);
             }
 
             xmlFreeDoc(ctx->doc);
@@ -430,7 +640,7 @@ ngx_http_xsltproc_add_chunk(ngx_http_request_t *r, ngx_http_xsltproc_filter_ctx_
     err = xmlParseChunk(ctx->ctxt, (char *) b->pos, (int) (b->last - b->pos),
                         (b->last_buf) || (b->last_in_chain));
 
-    if (err == 0) {
+    if (ctx->done == 0) {
         b->pos = b->last;
         return NGX_OK;
     }
@@ -515,181 +725,25 @@ ngx_http_xsltproc_sax_error(void *data, const char *msg, ...)
 
     ngx_log_error(NGX_LOG_ERR, ctx->request->connection->log, 0,
                   "libxml2 error: \"%*s\"", n + 1, buf);
+
+    ctx->done = 1; /* stop further chunk parsing */
 }
 
-
-static ngx_buf_t *
-ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
-    ngx_http_xsltproc_filter_ctx_t *ctx)
+static ngx_int_t
+ngx_http_xsltproc_apply_encoding(ngx_http_request_t *r,
+    ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet, int doc_type)
 {
-    int                                   len, rc, doc_type;
-    ngx_str_t                            *type, *encoding;
-    ngx_buf_t                            *b;
-    ngx_uint_t                            i;
-    xmlChar                              *buf;
-    xmlDocPtr                             doc, res;
-    const char                          **p;
-    ngx_http_xsltproc_sheet_t            *sheet;
-    ngx_http_xsltproc_filter_loc_conf_t  *conf;
-    ngx_http_xsltproc_xslt_stylesheet_t  *xslt_stylesheet;
-#if (NGX_HTTP_XSLPROC_PROFILER)
-    xmlDocPtr                             profile_info, summary_profile_info;
-    xmlNodePtr                            root, child, child2, child3;
-    long                                  start, spent;
-    char                                  strbuf[100];
-#endif
-    conf  = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
-    sheet = ctx->sheets->elts;
-    doc   = ctx->doc;
-
-#if (NGX_HTTP_XSLPROC_PROFILER)
-    if (conf->profiler == 1 && conf->profiler_stylesheet) {
-        /*
-         * <profiler parse_header_time="20" parse_body_time="44">
-         *   <stylesheet uri="main.xsl" time="444">
-         *     <profile>
-         *       <template name="" match="*" mode="" ... />
-         *       ...
-         *     </profile>
-         *     <document>
-         *       <root>
-         *         ...
-         *       </root>
-         *     </document>
-         *     <params>
-         *       <param name="name1" value="'value1'" />
-         *       ...
-         *     </params>
-         *   </stylesheet>
-         *   ...
-         * </profiler>
-         */
-
-        ctx->parse_body_time = xsltTimestamp() - ctx->parse_body_start;
-
-        summary_profile_info = xmlNewDoc((const xmlChar*) "1.0");
-        summary_profile_info->encoding = (const xmlChar*) xmlStrdup((const xmlChar*) "utf-8");
-
-        root = xmlNewDocNode(summary_profile_info, NULL, BAD_CAST "profiler", NULL);
-        xmlDocSetRootElement(summary_profile_info, root);
-
-        sprintf(strbuf, "%ld", ctx->parse_header_time);
-        xmlSetProp(root, BAD_CAST "parse_header_time", BAD_CAST strbuf);
-
-        sprintf(strbuf, "%ld", ctx->parse_body_time);
-        xmlSetProp(root, BAD_CAST "parse_body_time", BAD_CAST strbuf);
-    }
-#endif
-
-    for (i = 0; i < ctx->sheets->nelts; i++) {
-        xslt_stylesheet = sheet[i].xslt_stylesheet;
-
-#if (NGX_HTTP_XSLPROC_PROFILER)
-        if (conf->profiler == 1 && conf->profiler_stylesheet) {
-            profile_info = NULL;
-
-            start = xsltTimestamp();
-
-            res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc,
-                sheet[i].params.elts, conf->profiler, &profile_info);
-
-            spent = xsltTimestamp() - start;
-
-            if (res && profile_info) {
-                /* add stylesheet info */
-                child = xmlNewChild(root, NULL, BAD_CAST "stylesheet", NULL);
-                xmlSetProp(child, BAD_CAST "uri", BAD_CAST xslt_stylesheet->uri);
-
-                sprintf(strbuf, "%ld", spent);
-                xmlSetProp(child, BAD_CAST "time", BAD_CAST strbuf);
-
-                /* add profile info */
-                xmlAddChild(child, xmlDocCopyNode(xmlDocGetRootElement(profile_info), summary_profile_info, 1));
-
-                /* add document */
-                child2 = xmlNewChild(child, NULL, BAD_CAST "document", NULL);
-                xmlAddChild(child2, xmlDocCopyNode(xmlDocGetRootElement(doc), summary_profile_info, 1));
-
-                /* add params */
-                child2 = xmlNewChild(child, NULL, BAD_CAST "params", NULL);
-                if (sheet[i].params.nelts > 0) {
-                    p = sheet[i].params.elts;
-                    for(; *p != '\0'; p++) {
-                        child3 = xmlNewChild(child2, NULL, BAD_CAST "param", NULL);
-
-                        xmlSetProp(child3, BAD_CAST "name", BAD_CAST *p);
-                        p++;
-                        xmlSetProp(child3, BAD_CAST "value", BAD_CAST *p);
-                    }
-                }
-
-                xmlFreeDoc(profile_info);
-            }
-            else {
-                xmlFreeDoc(doc);
-                if (res) xmlFreeDoc(res);
-
-                ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                              "ngx_http_xsltproc_apply_stylesheet: no profile info");
-                return NULL;
-            }
-        }
-        else {
-            res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc,
-                sheet[i].params.elts, conf->profiler, NULL);
-        }
-#else
-        res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc,
-            sheet[i].params.elts, 0, NULL);
-#endif
-        xmlFreeDoc(doc);
-
-        if (res == NULL) {
-            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                          "xsltApplyStylesheet() failed");
-            return NULL;
-        }
-
-        doc = res;
-    }
-
-#if (NGX_HTTP_XSLPROC_PROFILER)
-    if (conf->profiler == 1 && conf->profiler_stylesheet) {
-        res = xsltApplyStylesheet(conf->profiler_stylesheet, summary_profile_info, NULL);
-
-        if (res) {
-            root = xmlDocCopyNode(xmlDocGetRootElement(res), doc, 1);
-
-            if (root) {
-                xmlAddChild(xmlDocGetRootElement(doc)->last, root);
-            }
-            else {
-                ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                               "ngx_http_xsltproc_apply_stylesheet: no root in profile info");
-            }
-
-            xmlFreeDoc(res);
-        }
-        else {
-            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                           "ngx_http_xsltproc_apply_stylesheet: no profile info");
-        }
-
-        xmlFreeDoc(summary_profile_info);
-    }
-#endif
-
-    /* there must be at least one stylesheet */
+    ngx_str_t *type, *encoding;
 
     encoding = ngx_palloc(r->pool, sizeof(ngx_str_t));
     if (encoding == NULL) {
-        return NULL;
+        return NGX_ERROR;
     }
     ngx_memzero(encoding, sizeof(ngx_str_t));
 
     type = ngx_palloc(r->pool, sizeof(ngx_str_t));
     if (type == NULL) {
-        return NULL;
+        return NGX_ERROR;
     }
     ngx_memzero(type, sizeof(ngx_str_t));
 
@@ -707,11 +761,93 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
         encoding->data = ngx_pstrdup(r->pool, encoding);
     }
 
-    doc_type = doc->type;
+    if (encoding->data) {
+        r->headers_out.charset.len  = encoding->len;
+        r->headers_out.charset.data = encoding->data;
+    }
+
+    if (r != r->main) {
+        return NGX_OK;
+    }
+
+    if (type->data) {
+        r->headers_out.content_type.len  = type->len;
+        r->headers_out.content_type.data = type->data;
+
+    } else if (doc_type == XML_HTML_DOCUMENT_NODE) {
+
+        r->headers_out.content_type_len = sizeof("text/html") - 1;
+        ngx_str_set(&r->headers_out.content_type, "text/html");
+    }
+
+    r->headers_out.content_type_lowcase = NULL;
+
+    return NGX_OK;
+}
+
+
+static ngx_buf_t *
+ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
+    ngx_http_xsltproc_filter_ctx_t *ctx, int *doc_type)
+{
+    int                                   len, rc;
+    ngx_buf_t                            *b;
+    ngx_uint_t                            i;
+    xmlChar                              *buf;
+    xmlDocPtr                             doc, res;
+    const char                          **p;
+    ngx_http_xsltproc_sheet_t            *sheet;
+    ngx_http_xsltproc_filter_loc_conf_t  *conf;
+    ngx_http_xsltproc_xslt_stylesheet_t  *xslt_stylesheet;
+
+    conf  = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
+    sheet = ctx->sheets->elts;
+    doc   = ctx->doc;
+
+#if (NGX_HTTP_XSLTPROC_PROFILER)
+    if (conf->profiler == 1 && conf->profiler_stylesheet) {
+        ngx_http_xsltproc_xslt_profiler_init(ctx->profiler);
+    }
+#endif
+
+    for (i = 0; i < ctx->sheets->nelts; i++) {
+        xslt_stylesheet = sheet[i].xslt_stylesheet;
+
+#if (NGX_HTTP_XSLTPROC_PROFILER)
+        res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc,
+            sheet[i].params.elts, conf->profiler, ctx->profiler);
+#else
+        res = ngx_http_xsltproc_xslt_transform(xslt_stylesheet, doc,
+            sheet[i].params.elts);
+#endif
+        xmlFreeDoc(doc);
+
+        if (res == NULL) {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                          "xsltApplyStylesheet() failed");
+            return NULL;
+        }
+
+        doc = res;
+    }
+
+#if (NGX_HTTP_XSLTPROC_PROFILER)
+    if (conf->profiler == 1 && conf->profiler_stylesheet) {
+        ngx_http_xsltproc_xslt_profiler_done(ctx->profiler, conf->profiler_stylesheet, doc);
+    }
+#endif
+
+    /* there must be at least one stylesheet */
+
+    *doc_type = doc->type;
 
     rc = xsltSaveResultToString(&buf, &len, doc, xslt_stylesheet->stylesheet);
 
     xmlFreeDoc(doc);
+
+    if (ngx_http_xsltproc_apply_encoding(r, xslt_stylesheet, *doc_type) != NGX_OK) {
+        return NULL;
+    }
 
     if (conf->stylesheet_caching != 1) {
         for (i = 0; i < ctx->sheets->nelts; i++) {
@@ -737,33 +873,13 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
         return NULL;
     }
 
-    b->pos = buf;
-    b->last = buf + len;
+    b->pos    = buf;
+    b->last   = buf + len;
     b->memory = 1;
 
-    if (encoding->data) {
-        r->headers_out.charset.len = encoding->len;
-        r->headers_out.charset.data = encoding->data;
+    if (r == r->main) {
+        b->last_buf = 1;
     }
-
-    if (r != r->main) {
-        return b;
-    }
-
-    b->last_buf = 1;
-
-    if (type->data) {
-        r->headers_out.content_type_len = type->len;
-        r->headers_out.content_type.len = type->len;
-        r->headers_out.content_type.data = type->data;
-
-    } else if (doc_type == XML_HTML_DOCUMENT_NODE) {
-
-        r->headers_out.content_type_len = sizeof("text/html") - 1;
-        ngx_str_set(&r->headers_out.content_type, "text/html");
-    }
-
-    r->headers_out.content_type_lowcase = NULL;
 
     return b;
 }
@@ -881,7 +997,7 @@ ngx_http_xsltproc_cleanup_dtd(void *data)
 }
 
 
-#if (NGX_HTTP_XSLPROC_PROFILER)
+#if (NGX_HTTP_XSLTPROC_PROFILER)
 static char *
 ngx_http_xsltproc_profiler_stylesheet(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
@@ -956,6 +1072,74 @@ ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf)
     return conf;
 }
 
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+static void
+ngx_http_xsltproc_cleanup_memcached(void *data)
+{
+     memcached_free(data);
+}
+
+static char *
+ngx_http_xsltproc_memcached_server(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_xsltproc_filter_loc_conf_t *xlcf = conf;
+    ngx_pool_cleanup_t                  *cln;
+    ngx_url_t                            u;
+    ngx_str_t                           *value;
+    char                                *tmp;
+
+    if (xlcf->memcached == NULL) {
+        cln = ngx_pool_cleanup_add(cf->pool, 0);
+        if (cln == NULL) {
+            return NGX_CONF_ERROR;
+        }
+
+        xlcf->memcached = memcached_create(NULL);
+
+        if (xlcf->memcached == NULL) {
+            ngx_conf_log_error(NGX_LOG_ERR, cf, 0, "memcached_create() failed");
+            return NGX_CONF_ERROR;
+        }
+
+        cln->handler = ngx_http_xsltproc_cleanup_memcached;
+        cln->data    = xlcf->memcached;
+    }
+
+    value = cf->args->elts;
+
+    ngx_memzero(&u, sizeof(ngx_url_t));
+
+    u.url        = value[1];
+    u.no_resolve = 1;
+
+    if (ngx_parse_url(cf->pool, &u) != NGX_OK) {
+        if (u.err) {
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                               "%s in memcached server \"%V\"", u.err, &u.url);
+        }
+
+        return NGX_CONF_ERROR;
+    }
+
+    tmp = ngx_pnalloc(cf->pool, u.host.len + 1);
+    if (tmp == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    ngx_memcpy(tmp, u.host.data, u.host.len);
+    tmp[u.host.len] = '\0';
+
+    if (u.family == AF_UNIX) {
+        memcached_server_add_unix_socket(xlcf->memcached, tmp);
+    }
+    else {
+        memcached_server_add(xlcf->memcached, tmp, u.port);
+    }
+
+    return NGX_CONF_OK;
+}
+#endif
+
 
 static void *
 ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf)
@@ -981,8 +1165,14 @@ ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf)
     conf->stylesheet_check_if_modify = NGX_CONF_UNSET;
     conf->document_caching           = NGX_CONF_UNSET;
     conf->keys_caching               = NGX_CONF_UNSET;
-#if (NGX_HTTP_XSLPROC_PROFILER)
+#if (NGX_HTTP_XSLTPROC_PROFILER)
     conf->profiler                   = NGX_CONF_UNSET;
+    conf->profiler_repeat            = NGX_CONF_UNSET;
+#endif
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+    conf->memcached_enable           = NGX_CONF_UNSET;
+    conf->memcached_key_auto         = NGX_CONF_UNSET;
+    conf->memcached_expire           = NGX_CONF_UNSET;
 #endif
 
     return conf;
@@ -1019,14 +1209,30 @@ ngx_http_xsltproc_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_str_value(conf->stylesheet_root,
         prev->stylesheet_root, "");
 
-#if (NGX_HTTP_XSLPROC_PROFILER)
+#if (NGX_HTTP_XSLTPROC_PROFILER)
     ngx_conf_merge_value(conf->profiler,
         prev->profiler, 0);
+
+    ngx_conf_merge_value(conf->profiler_repeat,
+        prev->profiler_repeat, 0);
 
     if (conf->profiler_stylesheet == NULL)
         conf->profiler_stylesheet = prev->profiler_stylesheet;
 #endif
 
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+    ngx_conf_merge_value(conf->memcached_enable,
+        prev->memcached_enable, 0);
+
+    ngx_conf_merge_str_value(conf->memcached_key_prefix,
+        prev->memcached_key_prefix, "");
+
+    ngx_conf_merge_value(conf->memcached_key_auto,
+        prev->memcached_key_auto, 0);
+
+    ngx_conf_merge_value(conf->memcached_expire,
+        prev->memcached_expire, 0);
+#endif
     return NGX_CONF_OK;
 }
 

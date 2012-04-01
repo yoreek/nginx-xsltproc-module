@@ -7,11 +7,24 @@ Synopsis
     #nginx.conf
         location / {
             xsltproc        on;
+
             xsltproc_stylesheet_caching on;
             xsltproc_stylesheet_root /var/www/example.com/template;
             xsltproc_stylesheet_check_if_modify on;
-            xsltproc_stylesheet_profiler /var/www/example.com/template/profiler.xslt;
+
+            xsltproc_profiler on;
+            xsltproc_profiler_stylesheet /var/www/example.com/template/profiler.xslt;
+            xsltproc_profiler_repeat on;
+
+            xsltproc_memcached on;
+            xsltproc_memcached_server 1.1.1.1:11211;
+            xsltproc_memcached_server 2.2.2.2:11211;
+            xsltproc_memcached_key_prefix site1_;
+            xsltproc_memcached_key_auto on;
+            xsltproc_memcached_expire 60m;
+
             xsltproc_types  application/xml;
+
             xml_entities    /site/dtd/entities.dtd;
 
             fastcgi_pass    127.0.0.1:9009;
@@ -140,6 +153,61 @@ Directives
                     </div>
                 </body>
             </html
+
+    xsltproc_profiler_repeat
+        syntax: *xsltproc_profiler_repeat on|off*
+
+        default: *xsltproc_profiler off*
+
+        context: *http, server, location, if in location*
+
+        Turning this directive on will run the transformation 20 times.
+
+    xsltproc_memcached
+        syntax: *xsltproc_memcached on|off*
+
+        default: *xsltproc_memcached off*
+
+        context: *http, server, location, if in location*
+
+        Turning this directive on will enable using memcahed.
+
+    xsltproc_memcached_server <name:[port]>
+        syntax: *xsltproc_memcached_server <url>*
+
+        default: *none*
+
+        context: *http, server, location, if in location*
+
+        Push a server into the list of memcahed servers.
+
+    xsltproc_memcached_key_prefix <prefix>
+        syntax: *xsltproc_memcached_key_prefix <prefix>*
+
+        default: *none*
+
+        context: *http, server, location, if in location*
+
+        The memcached key is "$prefix..."
+
+    xsltproc_memcached_key_auto
+        syntax: *xsltproc_memcached_key_auto on|off*
+
+        default: *xsltproc_memcached_key_auto off*
+
+        context: *http, server, location, if in location*
+
+        Turning this directive on will calculate a memcached key as md5sum
+        of the body + stylesheet info (uri, mtime, params).
+
+    xsltproc_memcached_expire <time>
+        syntax: *xsltproc_memcached_expire <time>*
+
+        default: *0*
+
+        context: *http, server, location, if in location*
+
+        Expiration time.
 
     xml_entities
         syntax: *xml_entities <path>*

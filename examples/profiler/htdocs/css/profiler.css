@@ -1,5 +1,5 @@
 .profiler {
-    font-family: monospace;
+    font: normal 11px Monospace;
     padding: 4px 0 0 2px;
     word-wrap: break-word;
 }

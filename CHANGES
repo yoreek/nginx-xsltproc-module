@@ -1,3 +1,8 @@
+2012-04-01    VERSION 0.9
+    * new feature:
+      - new option 'xsltproc_profiler_repeat' for the profiler.
+      - caching results of XSLT transformation with the libMemcached library.
+
 2012-03-17    VERSION 0.8
     * added some xslt functions (uc, lc, join, ltrim, rtrim, trim).
 

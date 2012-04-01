@@ -153,7 +153,167 @@ fi
 
 
 if [ $ngx_found = yes ]; then
-    CORE_LIBS="$CORE_LIBS -lexslt -licui18n -licuuc -licudata"
+    CORE_LIBS="$CORE_LIBS -lexslt"
+fi
+
+    ngx_feature="ICU library"
+    ngx_feature_name=NGX_HAVE_LIBICU
+    ngx_feature_run=no
+    ngx_feature_incs="#include <unicode/ucnv.h>
+                      #include <unicode/ustring.h>
+                      #include <unicode/utypes.h>
+                      #include <unicode/uloc.h>
+                      #include <unicode/ucol.h>"
+    ngx_feature_path="/usr/include"
+    ngx_feature_libs="-licui18n -licuuc -licudata"
+    ngx_feature_test="UConverter *conv;
+                      UErrorCode status;
+                      conv = ucnv_open(NULL, &status);"
+    . auto/feature
+
+if [ $ngx_found = no ]; then
+
+    # FreeBSD port
+
+    ngx_feature="ICU library in /usr/local/"
+    ngx_feature_path="/usr/local/include"
+
+    if [ $NGX_RPATH = YES ]; then
+        ngx_feature_libs="-R/usr/local/lib -L/usr/local/lib -licui18n -licuuc -licudata"
+    else
+        ngx_feature_libs="-L/usr/local/lib -licui18n -licuuc -licudata"
+    fi
+
+    . auto/feature
+fi
+
+
+if [ $ngx_found = no ]; then
+
+    # NetBSD port
+
+    ngx_feature="ICU library in /usr/pkg/"
+    ngx_feature_path="/usr/pkg/include"
+
+    if [ $NGX_RPATH = YES ]; then
+        ngx_feature_libs="-R/usr/pkg/lib -L/usr/pkg/lib -licui18n -licuuc -licudata"
+    else
+        ngx_feature_libs="-L/usr/pkg/lib -licui18n -licuuc -licudata"
+    fi
+
+    . auto/feature
+fi
+
+
+if [ $ngx_found = no ]; then
+
+    # MacPorts
+
+    ngx_feature="ICU library in /opt/local/"
+    ngx_feature_path="/opt/local/include"
+
+    if [ $NGX_RPATH = YES ]; then
+        ngx_feature_libs="-R/opt/local/lib -L/opt/local/lib -licui18n -licuuc -licudata"
+    else
+        ngx_feature_libs="-L/opt/local/lib -licui18n -licuuc -licudata"
+    fi
+
+    . auto/feature
+fi
+
+
+if [ $ngx_found = yes ]; then
+
+    CORE_INCS="$CORE_INCS $ngx_feature_path"
+    CORE_LIBS="$CORE_LIBS $ngx_feature_libs"
+
+else
+
+cat << END
+
+$0: error: the HTTP XSLTPROC module requires the ICU libraries.
+You can either do not enable the module or install the libraries.
+
+END
+
+    exit 1
+fi
+
+    ngx_feature="libmemcached"
+    ngx_feature_name=NGX_HAVE_LIBMEMCACHED
+    ngx_feature_run=no
+    ngx_feature_incs="#include <libmemcached/memcached.h>"
+    ngx_feature_path="/usr/include"
+    ngx_feature_libs="-lmemcached"
+    ngx_feature_test="memcached_create(NULL);"
+    . auto/feature
+
+if [ $ngx_found = no ]; then
+
+    # FreeBSD port
+
+    ngx_feature="libmemcached in /usr/local/"
+    ngx_feature_path="/usr/local/include"
+
+    if [ $NGX_RPATH = YES ]; then
+        ngx_feature_libs="-R/usr/local/lib -L/usr/local/lib -lmemcached"
+    else
+        ngx_feature_libs="-L/usr/local/lib -lmemcached"
+    fi
+
+    . auto/feature
+fi
+
+
+if [ $ngx_found = no ]; then
+
+    # NetBSD port
+
+    ngx_feature="libmemcached in /usr/pkg/"
+    ngx_feature_path="/usr/pkg/include"
+
+    if [ $NGX_RPATH = YES ]; then
+        ngx_feature_libs="-R/usr/pkg/lib -L/usr/pkg/lib -lmemcached"
+    else
+        ngx_feature_libs="-L/usr/pkg/lib -lmemcached"
+    fi
+
+    . auto/feature
+fi
+
+
+if [ $ngx_found = no ]; then
+
+    # MacPorts
+
+    ngx_feature="libmemcached in /opt/local/"
+    ngx_feature_path="/opt/local/include"
+
+    if [ $NGX_RPATH = YES ]; then
+        ngx_feature_libs="-R/opt/local/lib -L/opt/local/lib -lmemcached"
+    else
+        ngx_feature_libs="-L/opt/local/lib -lmemcached"
+    fi
+
+    . auto/feature
+fi
+
+
+if [ $ngx_found = yes ]; then
+
+    CORE_INCS="$CORE_INCS $ngx_feature_path"
+    CORE_LIBS="$CORE_LIBS $ngx_feature_libs"
+
+else
+
+cat << END
+
+$0: error: the HTTP XSLTPROC module requires the libMemcached library.
+You can either do not enable the module or install the library.
+
+END
+
+    exit 1
 fi
 
 ngx_addon_name=ngx_http_xsltproc_filter_module

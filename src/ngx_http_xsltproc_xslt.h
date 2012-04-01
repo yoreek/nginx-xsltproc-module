@@ -37,14 +37,24 @@ typedef struct {
 } ngx_http_xsltproc_xslt_keys_t;
 
 /* ngx_http_xsltproc_xslt */
+#if (NGX_HTTP_XSLTPROC_PROFILER)
 xmlDocPtr ngx_http_xsltproc_xslt_transform(
     ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet, xmlDocPtr doc,
-    const char **params, int profiler, xmlDocPtr *profile_info);
+    const char **params, int profiler_enabled, ngx_http_xsltproc_profiler_t *profiler);
+#else
+xmlDocPtr ngx_http_xsltproc_xslt_transform(
+    ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet, xmlDocPtr doc,
+    const char **params);
+#endif
 int ngx_http_xsltproc_xslt_output(char **buf, int *buf_len, xmlDocPtr result,
     ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet);
 void ngx_http_xsltproc_xslt_init(ngx_log_t *log);
 void ngx_http_xsltproc_xslt_cleanup(void);
-
+#if (NGX_HTTP_XSLTPROC_PROFILER)
+void ngx_http_xsltproc_xslt_profiler_init(ngx_http_xsltproc_profiler_t *profiler);
+void ngx_http_xsltproc_xslt_profiler_done(ngx_http_xsltproc_profiler_t *profiler,
+                                          xsltStylesheetPtr stylesheet, xmlDocPtr doc);
+#endif
 /* ngx_http_xsltproc_xslt_document_cache */
 ngx_http_xsltproc_xslt_document_t *ngx_http_xsltproc_xslt_document_cache_lookup(char *uri);
 int ngx_http_xsltproc_xslt_document_cache_init(ngx_log_t *log);

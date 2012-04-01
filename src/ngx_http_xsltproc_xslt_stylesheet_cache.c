@@ -65,7 +65,7 @@ ngx_http_xsltproc_xslt_stylesheet_cache_lookup(ngx_http_xsltproc_filter_loc_conf
                            uri);
 #endif
 
-#if (NGX_HTTP_XSLPROC_XSLT_DOCUMENT_CACHING && NGX_HTTP_XSLPROC_XSLT_KEYS_CACHING)
+#if (NGX_HTTP_XSLTPROC_XSLT_DOCUMENT_CACHING && NGX_HTTP_XSLTPROC_XSLT_KEYS_CACHING)
         ngx_http_xsltproc_xslt_keys_cache_expire(xslt_stylesheet->uri, xslt_stylesheet->mtime, NULL, 0);
 #endif
 

@@ -37,11 +37,18 @@ typedef struct {
     xmlParserCtxtPtr     ctxt;
     ngx_http_request_t  *request;
     ngx_array_t         *sheets;       /* ngx_http_xsltproc_sheet_t */
-    long                 parse_header_start;
-    long                 parse_header_time;
-    long                 parse_body_start;
-    long                 parse_body_time;
-
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+    memcached_st        *memcached;
+    ngx_str_t            memcached_key;
+    ngx_str_t            memcached_key_prefix;
+    ngx_str_t            memcached_key_real;
+    ngx_uint_t           memcached_key_auto;
+    time_t               memcached_expire;
+    ngx_uint_t           memcached_done;
+#endif
+#if (NGX_HTTP_XSLTPROC_PROFILER)
+    ngx_http_xsltproc_profiler_t *profiler;
+#endif
     ngx_uint_t           done;         /* unsigned  done:1; */
 } ngx_http_xsltproc_filter_ctx_t;
 
@@ -49,7 +56,13 @@ typedef struct {
 static ngx_int_t ngx_http_xsltproc_parse_stylesheet(ngx_http_request_t *r,
     u_char *name, ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet);
 static ngx_int_t ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params);
-static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root, ngx_array_t *sheets);
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root,
+    ngx_array_t *sheets, ngx_str_t *memcached_key);
+#else
+static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root,
+    ngx_array_t *sheets);
+#endif
 static ngx_int_t ngx_http_xsltproc_header_filter(ngx_http_request_t *r);
 
 static ngx_int_t ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in);
@@ -61,7 +74,9 @@ static void ngx_http_xsltproc_sax_external_subset(void *data, const xmlChar *nam
     const xmlChar *externalId, const xmlChar *systemId);
 static void ngx_cdecl ngx_http_xsltproc_sax_error(void *data, const char *msg, ...);
 static ngx_buf_t * ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
-    ngx_http_xsltproc_filter_ctx_t *ctx);
+    ngx_http_xsltproc_filter_ctx_t *ctx, int *doc_type);
+static ngx_int_t ngx_http_xsltproc_apply_encoding(ngx_http_request_t *r,
+    ngx_http_xsltproc_xslt_stylesheet_t *xslt_stylesheet, int doc_type);
 
 static u_char * ngx_http_xsltproc_content_type(xsltStylesheetPtr s);
 
@@ -73,9 +88,20 @@ static char * ngx_http_xsltproc_entities(ngx_conf_t *cf, ngx_command_t *cmd, voi
 
 static void ngx_http_xsltproc_cleanup_dtd(void *data);
 
-#if (NGX_HTTP_XSLPROC_PROFILER)
+#if (NGX_HTTP_XSLTPROC_PROFILER)
 static char * ngx_http_xsltproc_profiler_stylesheet(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static void ngx_http_xsltproc_cleanup_profiler_stylesheet(void *data);
+#endif
+
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+static char *
+ngx_http_xsltproc_memcached_server(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static ngx_buf_t *
+ngx_http_xsltproc_memcached_get(ngx_http_request_t *r, ngx_chain_t *in,
+                                ngx_http_xsltproc_filter_ctx_t *ctx);
+static void
+ngx_http_xsltproc_memcached_set(ngx_http_request_t *r, ngx_buf_t *b, int doc_type,
+                                ngx_http_xsltproc_filter_ctx_t *ctx);
 #endif
 
 static void * ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf);
@@ -135,7 +161,7 @@ static ngx_command_t  ngx_http_xsltproc_filter_commands[] = {
       0,
       NULL },
 
-#if (NGX_HTTP_XSLPROC_PROFILER)
+#if (NGX_HTTP_XSLTPROC_PROFILER)
     { ngx_string("xsltproc_profiler"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
                         |NGX_CONF_FLAG,
@@ -150,6 +176,57 @@ static ngx_command_t  ngx_http_xsltproc_filter_commands[] = {
       ngx_http_xsltproc_profiler_stylesheet,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
+      NULL },
+
+    { ngx_string("xsltproc_profiler_repeat"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, profiler_repeat),
+      NULL },
+
+#endif
+
+#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+    { ngx_string("xsltproc_memcached"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, memcached_enable),
+      NULL },
+
+    { ngx_string("xsltproc_memcached_server"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_TAKE1,
+      ngx_http_xsltproc_memcached_server,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL },
+
+    { ngx_string("xsltproc_memcached_key_prefix"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, memcached_key_prefix),
+      NULL },
+
+    { ngx_string("xsltproc_memcached_key_auto"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, memcached_key_auto),
+      NULL },
+
+    { ngx_string("xsltproc_memcached_expire"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_TAKE1,
+      ngx_conf_set_sec_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_xsltproc_filter_loc_conf_t, memcached_expire),
       NULL },
 #endif
 
