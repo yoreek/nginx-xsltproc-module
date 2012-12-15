@@ -244,7 +244,7 @@ fi
     ngx_feature_run=no
     ngx_feature_incs="#include <libmemcached/memcached.h>"
     ngx_feature_path="/usr/include"
-    ngx_feature_libs="-lmemcached"
+    ngx_feature_libs="-lmemcached -lpthread"
     ngx_feature_test="memcached_create(NULL);"
     . auto/feature
 
