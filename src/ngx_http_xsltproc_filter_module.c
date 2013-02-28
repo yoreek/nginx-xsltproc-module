@@ -122,7 +122,7 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root,
                                ngx_array_t *sheets)
 #endif
 {
-    ngx_uint_t                           i, flags;
+    ngx_uint_t                           i;
     ngx_list_part_t                     *part;
     ngx_table_elt_t                     *h;
     ngx_str_t                            path;
@@ -379,7 +379,7 @@ ngx_http_xsltproc_memcached_get(ngx_http_request_t *r, ngx_chain_t *in,
             return NULL;
 
         if (ctx->memcached_key_prefix.len > 0)
-            ngx_copy(ctx->memcached_key_real.data, ctx->memcached_key_prefix.data,
+            (void) ngx_copy(ctx->memcached_key_real.data, ctx->memcached_key_prefix.data,
                      ctx->memcached_key_prefix.len);
     }
 
@@ -410,7 +410,7 @@ ngx_http_xsltproc_memcached_get(ngx_http_request_t *r, ngx_chain_t *in,
         ngx_hex_dump(&ctx->memcached_key_real.data[ctx->memcached_key_prefix.len], md5_buf, 16);
     }
     else {
-        ngx_copy(&ctx->memcached_key_real.data[ctx->memcached_key_prefix.len],
+        (void) ngx_copy(&ctx->memcached_key_real.data[ctx->memcached_key_prefix.len],
                  ctx->memcached_key.data, ctx->memcached_key.len);
     }
 
@@ -795,10 +795,9 @@ ngx_http_xsltproc_apply_stylesheet(ngx_http_request_t *r,
     ngx_uint_t                            i;
     xmlChar                              *buf;
     xmlDocPtr                             doc, res;
-    const char                          **p;
     ngx_http_xsltproc_sheet_t            *sheet;
     ngx_http_xsltproc_filter_loc_conf_t  *conf;
-    ngx_http_xsltproc_xslt_stylesheet_t  *xslt_stylesheet;
+    ngx_http_xsltproc_xslt_stylesheet_t  *xslt_stylesheet = NULL;
 
     conf  = ngx_http_get_module_loc_conf(r, ngx_http_xsltproc_filter_module);
     sheet = ctx->sheets->elts;
