@@ -1,3 +1,6 @@
+2013-03-01    VERSION 0.13
+    * fixed bug with "xsltproc_profiler_repeat" option
+
 2013-02-28    VERSION 0.12
     * fixed compiler warnings
 

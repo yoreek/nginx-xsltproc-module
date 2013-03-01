@@ -157,7 +157,7 @@ Directives
     xsltproc_profiler_repeat
         syntax: *xsltproc_profiler_repeat on|off*
 
-        default: *xsltproc_profiler off*
+        default: *xsltproc_profiler_repeat off*
 
         context: *http, server, location, if in location*
 

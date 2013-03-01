@@ -333,8 +333,12 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
         ctx->profiler->parse_header_time  = end - start;
         ctx->profiler->parse_body_start   = end;
 
-        if (conf->profiler_repeat == 1)
+        if (conf->profiler_repeat == 1) {
             ctx->profiler->repeat = 20;
+        }
+        else {
+            ctx->profiler->repeat = 1;
+        }
     }
 #endif
 
