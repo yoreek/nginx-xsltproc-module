@@ -2,6 +2,7 @@ package Mojolicious::Plugin::NginxRenderer;
 
 use Mojo::Base 'Mojolicious::Plugin';
 use XML::Hash::XS;
+use Encode;
 
 use constant EXT => 'xsl';
 
@@ -12,7 +13,7 @@ sub register {
         my ($renderer, $c, $output, $options) = @_;
 
         my $model = $c->stash('model') || {};
-        $$output  = hash2xml($model);
+        $$output  = decode( 'utf-8', hash2xml($model) );
 
         my $path = join('.', $options->{template}, EXT);
         $c->res->headers->header('X-Xslt-Stylesheet' => $path);
