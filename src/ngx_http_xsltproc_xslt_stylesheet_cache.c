@@ -85,14 +85,13 @@ ngx_http_xsltproc_xslt_stylesheet_cache_lookup(ngx_http_xsltproc_filter_loc_conf
 }
 
 static void ngx_http_xsltproc_xslt_stylesheet_cache_free(void) {
-    ngx_http_xsltproc_list_t *el;
+    ngx_http_xsltproc_list_t *el, *next_el;
 
-    for (
-        el = ngx_http_xsltproc_list_first(&xslt_stylesheet_cache);
-        el != ngx_http_xsltproc_list_end(&xslt_stylesheet_cache);
-        el = ngx_http_xsltproc_list_next(el)
-    ) {
+    el = ngx_http_xsltproc_list_first(&xslt_stylesheet_cache);
+    while (el != ngx_http_xsltproc_list_end(&xslt_stylesheet_cache)) {
+        next_el = ngx_http_xsltproc_list_next(el);
         ngx_http_xsltproc_xslt_stylesheet_free((ngx_http_xsltproc_xslt_stylesheet_t *) el);
+        el = next_el;
     }
 }
 

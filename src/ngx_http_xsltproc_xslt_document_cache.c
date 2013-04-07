@@ -53,13 +53,13 @@ ngx_http_xsltproc_xslt_document_t *ngx_http_xsltproc_xslt_document_cache_lookup(
 }
 
 static void ngx_http_xsltproc_xslt_document_cache_free(void) {
-    ngx_http_xsltproc_list_t *el;
-    for (
-        el = ngx_http_xsltproc_list_first(&xslt_document_cache);
-        el != ngx_http_xsltproc_list_end(&xslt_document_cache);
-        el = ngx_http_xsltproc_list_next(el)
-    ) {
+    ngx_http_xsltproc_list_t *el, *next_el;
+
+    el = ngx_http_xsltproc_list_first(&xslt_document_cache);
+    while (el != ngx_http_xsltproc_list_end(&xslt_document_cache)) {
+        next_el = ngx_http_xsltproc_list_next(el);
         ngx_http_xsltproc_xslt_document_free((ngx_http_xsltproc_xslt_document_t *) el);
+        el = next_el;
     }
 }
 

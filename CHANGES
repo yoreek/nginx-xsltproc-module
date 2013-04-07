@@ -1,3 +1,6 @@
+2013-04-08    VERSION 0.14
+    * fixed memory free bug
+
 2013-03-01    VERSION 0.13
     * fixed bug with "xsltproc_profiler_repeat" option
 
