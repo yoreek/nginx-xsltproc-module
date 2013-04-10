@@ -1,0 +1,66 @@
+.profiler {
+    font-family: monospace;
+    padding: 4px 0 0 2px;
+    word-wrap: break-word;
+}
+
+.profiler table {
+    border-collapse: collapse;
+    border: 1px solid #000;
+    text-align: center;
+    padding: 4px;
+    margin: 4px 0;
+}
+
+.profiler td, .profiler th {
+    border: 1px solid #000;
+    padding: 4px;
+}
+
+.profiler ul {
+    list-style: none;
+    margin-left: 0;
+    padding-left: 10px;
+}
+
+.profiler li {
+    padding-left: 14px;
+}
+
+.profiler > ul > li {
+    padding-left: 0;
+}
+
+.profiler li > label {
+    min-width: 42ch;
+    min-height: 12px;
+    padding-left: 14px;
+}
+
+.profiler li > label:first-child {
+    cursor: pointer;
+    background-repeat: no-repeat;
+    background-position: 2px 2px;
+    background-image: url(/img/node-open.png);
+}
+
+.profiler li.closed > ul {
+    display: none;
+}
+
+.profiler li.closed > label:first-child {
+    background-image: url(/img/node-closed.png);
+}
+
+.profiler li.closed > label:last-child,
+.profiler li.node-text > label:last-child {
+    padding-left: 0;
+}
+
+.profiler li.node-text > label {
+    background-image: none;
+}
+
+.profiler label b {color: #3366cc;}
+.profiler label i {color: orange; font-style: normal;}
+.profiler label s {color: green; text-decoration:none;}

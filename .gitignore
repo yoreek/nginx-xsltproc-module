@@ -1,0 +1,8 @@
+.*
+
+/dist/ubuntu
+/examples/Dancer/log/*
+
+# exclude
+!.gitkeep
+!.gitignore
