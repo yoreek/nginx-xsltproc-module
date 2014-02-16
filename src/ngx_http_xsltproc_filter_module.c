@@ -1008,7 +1008,7 @@ ngx_http_xsltproc_profiler_stylesheet(ngx_conf_t *cf, ngx_command_t *cmd, void *
 
     ngx_str_t                             *value;
     ngx_pool_cleanup_t                    *cln;
-    ngx_http_xsltproc_filter_main_conf_t  *xmcf;
+    /*ngx_http_xsltproc_filter_main_conf_t  *xmcf;*/
 
     if (xlcf->profiler_stylesheet) {
         return "is duplicate";
@@ -1016,7 +1016,7 @@ ngx_http_xsltproc_profiler_stylesheet(ngx_conf_t *cf, ngx_command_t *cmd, void *
 
     value = cf->args->elts;
 
-    xmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_xsltproc_filter_module);
+    /*xmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_xsltproc_filter_module);*/
 
     cln = ngx_pool_cleanup_add(cf->pool, 0);
     if (cln == NULL) {

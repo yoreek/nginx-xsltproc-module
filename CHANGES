@@ -1,3 +1,6 @@
+2014-02-17    VERSION 0.15
+    * libmemcached is no longer required
+
 2013-04-08    VERSION 0.14
     * fixed memory free bug
 
