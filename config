@@ -239,6 +239,9 @@ END
     exit 1
 fi
 
+LIBMEMCACHED_ENABLED=no
+
+if [ $LIBMEMCACHED_ENABLED = yes ]; then
     ngx_feature="libmemcached"
     ngx_feature_name=NGX_HAVE_LIBMEMCACHED
     ngx_feature_run=no
@@ -303,6 +306,8 @@ if [ $ngx_found = yes ]; then
 
     CORE_INCS="$CORE_INCS $ngx_feature_path"
     CORE_LIBS="$CORE_LIBS $ngx_feature_libs"
+
+fi
 
 fi
 

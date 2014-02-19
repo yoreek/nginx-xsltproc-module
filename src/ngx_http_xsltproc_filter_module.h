@@ -37,7 +37,7 @@ typedef struct {
     xmlParserCtxtPtr     ctxt;
     ngx_http_request_t  *request;
     ngx_array_t         *sheets;       /* ngx_http_xsltproc_sheet_t */
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     memcached_st        *memcached;
     ngx_str_t            memcached_key;
     ngx_str_t            memcached_key_prefix;
@@ -56,7 +56,7 @@ typedef struct {
 static ngx_int_t ngx_http_xsltproc_parse_stylesheet(ngx_http_request_t *r,
     u_char *name, ngx_http_xsltproc_xslt_stylesheet_t **xslt_stylesheet);
 static ngx_int_t ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params);
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
 static ngx_int_t ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root,
     ngx_array_t *sheets, ngx_str_t *memcached_key);
 #else
@@ -93,7 +93,7 @@ static char * ngx_http_xsltproc_profiler_stylesheet(ngx_conf_t *cf, ngx_command_
 static void ngx_http_xsltproc_cleanup_profiler_stylesheet(void *data);
 #endif
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
 static char *
 ngx_http_xsltproc_memcached_server(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static ngx_buf_t *
@@ -188,7 +188,7 @@ static ngx_command_t  ngx_http_xsltproc_filter_commands[] = {
 
 #endif
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     { ngx_string("xsltproc_memcached"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
                         |NGX_CONF_FLAG,

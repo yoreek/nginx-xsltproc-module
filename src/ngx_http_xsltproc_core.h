@@ -5,9 +5,6 @@
 #define NGX_HTTP_XSLTPROC_PROFILER  1
 #endif
 
-#ifndef NGX_HTTP_XSLTPROC_MEMCACHED
-#define NGX_HTTP_XSLTPROC_MEMCACHED  NGX_HAVE_LIBMEMCACHED
-#endif
 
 #ifndef NGX_HTTP_XSLTPROC_XSLT_DOCUMENT_CACHING
 #define NGX_HTTP_XSLTPROC_XSLT_DOCUMENT_CACHING  1
@@ -41,14 +38,15 @@
 #include <unicode/uloc.h>
 #include <unicode/ucol.h>
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
-#include <libmemcached/memcached.h>
-#endif
 
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
 #include <ngx_md5.h>
+
+#if (NGX_HAVE_LIBMEMCACHED)
+#include <libmemcached/memcached.h>
+#endif
 
 void *ngx_http_xsltproc_malloc(size_t size);
 void ngx_http_xsltproc_free(void *p);
@@ -71,7 +69,7 @@ typedef struct {
     xmlDtdPtr            dtd;
     ngx_hash_t           types;
     ngx_array_t         *types_keys;
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     memcached_st        *memcached;
     ngx_flag_t           memcached_enable;
     ngx_str_t            memcached_key_prefix;

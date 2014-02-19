@@ -112,7 +112,7 @@ ngx_http_xsltproc_parse_params(ngx_http_request_t *r, ngx_array_t *params)
 }
 
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
 static ngx_int_t
 ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root,
                                ngx_array_t *sheets, ngx_str_t *memcached_key)
@@ -200,7 +200,7 @@ ngx_http_xsltproc_parse_header(ngx_http_request_t *r, ngx_str_t *root,
             /* hide header */
             h[i].hash = 0;
         }
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
         else if (h[i].key.len == sizeof("x-xslt-memcached-key") -1
             && ngx_strncasecmp(h[i].key.data,
                                 (u_char *) "x-xslt-memcached-key",
@@ -232,7 +232,7 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     ngx_http_xsltproc_filter_ctx_t       *ctx;
     ngx_http_xsltproc_filter_loc_conf_t  *conf;
     ngx_array_t                          *sheets;
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     ngx_str_t                             memcached_key;
 #endif
 #if (NGX_HTTP_XSLTPROC_PROFILER)
@@ -269,7 +269,7 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     }
 
     /* parse header */
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     memcached_key.data = NULL;
     memcached_key.len = 0;
 
@@ -303,7 +303,7 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
 
     ctx->sheets = sheets;
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     if (conf->memcached_enable == 1
         && conf->memcached != NULL
         && (memcached_key.len > 0 || conf->memcached_key_auto == 1)
@@ -347,7 +347,7 @@ ngx_http_xsltproc_header_filter(ngx_http_request_t *r)
     return NGX_OK;
 }
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
 static ngx_buf_t *
 ngx_http_xsltproc_memcached_get(ngx_http_request_t *r, ngx_chain_t *in,
                                 ngx_http_xsltproc_filter_ctx_t *ctx)
@@ -498,7 +498,7 @@ ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         return ngx_http_next_body_filter(r, in);
     }
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     if (ctx->memcached != NULL && ctx->memcached_done == 0) {
         b = ngx_http_xsltproc_memcached_get(r, in, ctx);
 
@@ -539,7 +539,7 @@ ngx_http_xsltproc_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             if (wellFormed) {
                 b = ngx_http_xsltproc_apply_stylesheet(r, ctx, &doc_type);
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
                 if (ctx->memcached != NULL && b != NULL) {
                     ngx_http_xsltproc_memcached_set(r, b, doc_type, ctx);
                 }
@@ -1075,7 +1075,7 @@ ngx_http_xsltproc_filter_create_main_conf(ngx_conf_t *cf)
     return conf;
 }
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
 static void
 ngx_http_xsltproc_cleanup_memcached(void *data)
 {
@@ -1172,7 +1172,7 @@ ngx_http_xsltproc_filter_create_conf(ngx_conf_t *cf)
     conf->profiler                   = NGX_CONF_UNSET;
     conf->profiler_repeat            = NGX_CONF_UNSET;
 #endif
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     conf->memcached_enable           = NGX_CONF_UNSET;
     conf->memcached_key_auto         = NGX_CONF_UNSET;
     conf->memcached_expire           = NGX_CONF_UNSET;
@@ -1223,7 +1223,7 @@ ngx_http_xsltproc_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child)
         conf->profiler_stylesheet = prev->profiler_stylesheet;
 #endif
 
-#if (NGX_HTTP_XSLTPROC_MEMCACHED)
+#if (NGX_HAVE_LIBMEMCACHED)
     ngx_conf_merge_value(conf->memcached_enable,
         prev->memcached_enable, 0);
 
