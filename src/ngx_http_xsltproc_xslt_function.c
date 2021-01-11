@@ -105,7 +105,7 @@ ngx_http_xsltproc_xslt_function_case_convert(xmlXPathParserContextPtr ctxt,
 
     ucnv_toUChars(conv, buffer1, buf_len, (const char *) src, -1, &status);
 
-    isError = FALSE;
+    isError = 0;
     for(i = j = 0; j < len && !isError; /* U16_NEXT post-increments */) {
         U16_NEXT(buffer1, i, len, c);
         c = case_convert(c);

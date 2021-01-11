@@ -1,3 +1,6 @@
+2021-01-11    VERSION 0.17
+	* fix compilation bug with undeclared FALSE macro
+
 2014-02-17    VERSION 0.15
     * libmemcached is no longer required
 
